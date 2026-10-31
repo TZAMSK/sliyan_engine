@@ -2,7 +2,6 @@ use wgpu::{Buffer, CommandEncoderDescriptor, Device, Queue, Texture};
 
 #[derive(Debug)]
 pub struct Picker {
-    hovered_shape_id: u32,
     pub selected_shape_id: u32,
     pick_buffer: Buffer,
 }
@@ -17,7 +16,6 @@ impl Picker {
         });
 
         Self {
-            hovered_shape_id: 0,
             selected_shape_id: 0,
             pick_buffer,
         }

@@ -9,7 +9,7 @@ use winit::{application::ApplicationHandler, window::Window};
 
 use crate::{
     app::{
-        app_state::AppState,
+        app_state::{AppState, ViewportState},
         input::{Drag, Input},
     },
     renderer::Renderer,
@@ -93,6 +93,62 @@ impl Application {
 
         state.log_shape_added(&world_point);
     }
+
+    fn redraw(&mut self) {
+        let (Some(window), Some(renderer), Some(ui), Some(camera), Some(state), Some(scene)) = (
+            self.window.as_ref(),
+            self.renderer.as_mut(),
+            self.ui.as_mut(),
+            self.camera.as_mut(),
+            self.state.as_mut(),
+            self.scene.as_mut(),
+        ) else {
+            return;
+        };
+
+        state.update();
+
+        let (w, h) = (state.viewport.width, state.viewport.height);
+        if w > 0 && h > 0 && (w, h) != renderer.viewport_size() {
+            renderer.resize_viewport(w, h);
+            camera.camera.set_aspect(w as f32 / h as f32);
+            ui.update_viewport_texture(&renderer.device, renderer.viewport_view());
+        }
+
+        self.input.update_drag(state.viewport.hovered);
+
+        if self.input.drag() == Drag::Orbit {
+            camera.camera.move_camera(self.input.mouse_delta(), 0.25);
+        }
+
+        if state.viewport.hovered {
+            camera.camera.zoom_camera(self.input.scroll());
+        }
+
+        left_mouse_actions(&mut self.input, state, scene, renderer, camera);
+
+        right_mouse_actions(&mut self.input, state, renderer, ui);
+
+        camera.update(&renderer.queue);
+
+        state.camera.position = camera.camera.position().into();
+        state.camera.target = camera.camera.target().into();
+
+        renderer.sync_shapes(&mut scene.shapes);
+
+        match renderer.render(ui, state, window, camera, scene, &mut self.gizmo) {
+            Ok(_) => {}
+            Err(SurfaceError::Lost | SurfaceError::Outdated) => {
+                let size = window.inner_size();
+                renderer.resize(size.width, size.height);
+            }
+            Err(e) => log::error!("Failed to render: {}", e),
+        }
+
+        self.input.end_frame();
+
+        window.request_redraw();
+    }
 }
 
 impl ApplicationHandler for Application {
@@ -110,13 +166,10 @@ impl ApplicationHandler for Application {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        let (Some(window), Some(renderer), Some(ui), Some(camera), Some(state), Some(scene)) = (
+        let (Some(window), Some(renderer), Some(ui)) = (
             self.window.as_ref(),
             self.renderer.as_mut(),
             self.ui.as_mut(),
-            self.camera.as_mut(),
-            self.state.as_mut(),
-            self.scene.as_mut(),
         ) else {
             return;
         };
@@ -142,119 +195,88 @@ impl ApplicationHandler for Application {
             winit::event::WindowEvent::Resized(size) => {
                 renderer.resize(size.width, size.height);
             }
-            winit::event::WindowEvent::RedrawRequested => {
-                state.update();
-
-                let (w, h) = (state.viewport.width, state.viewport.height);
-                if w > 0 && h > 0 && (w, h) != renderer.viewport_size() {
-                    renderer.resize_viewport(w, h);
-                    camera.camera.set_aspect(w as f32 / h as f32);
-                    ui.update_viewport_texture(&renderer.device, renderer.viewport_view());
-                }
-
-                self.input.update_drag(state.viewport.hovered);
-
-                if self.input.drag() == Drag::Orbit {
-                    camera.camera.move_camera(self.input.mouse_delta(), 0.25);
-                }
-
-                if state.viewport.hovered {
-                    camera.camera.zoom_camera(self.input.scroll());
-                }
-
-                if let Some(mouse) = self.input.take_left_click() {
-                    let mp = self.input.mouse_pos();
-                    let local_x = mp.x - state.viewport.position.x;
-                    let local_y = mp.y - state.viewport.position.y;
-
-                    let inside_viewport = local_x >= 0.0
-                        && local_y >= 0.0
-                        && local_x < state.viewport.width as f32
-                        && local_y < state.viewport.height as f32;
-
-                    if inside_viewport {
-                        let is_placement = state.selection.as_ref().is_some_and(|selection| {
-                            selection.placement_mode != PlacementMode::None
-                        });
-
-                        if is_placement {
-                            if let Some(point) = input::mouse_local_to_world_space(
-                                &state.viewport,
-                                &camera.camera,
-                                mouse.x,
-                                mouse.y,
-                            ) {
-                                Self::on_viewport_clicked(scene, state, &point);
-                            }
-                        } else if let Some(selection) = state.selection.as_mut() {
-                            let id = selection.picker.pick(
-                                &renderer.device,
-                                &renderer.queue,
-                                &renderer.viewport.id_texture,
-                                renderer.viewport_size(),
-                                local_x as u32,
-                                local_y as u32,
-                            );
-
-                            selection.picker.set_selected_shape_id(id);
-
-                            if id == 0 {
-                                state.console.append("Selection cleared");
-                            } else {
-                                state.console.append(&format!("Selected shape {id}"));
-                            }
-                        }
-                    }
-                }
-
-                if let Some(mouse) = self.input.take_right_click() {
-                    let local_x = mouse.x - state.viewport.position.x;
-                    let local_y = mouse.y - state.viewport.position.y;
-
-                    let inside_viewport = local_x >= 0.0
-                        && local_y >= 0.0
-                        && local_x < state.viewport.width as f32
-                        && local_y < state.viewport.height as f32;
-
-                    if inside_viewport {
-                        if let Some(selection) = state.selection.as_mut() {
-                            let id = selection.picker.pick(
-                                &renderer.device,
-                                &renderer.queue,
-                                &renderer.viewport.id_texture,
-                                renderer.viewport_size(),
-                                local_x as u32,
-                                local_y as u32,
-                            );
-
-                            if id != 0 {
-                                ui.open_shape_context_menu(id, mouse);
-                            }
-                        }
-                    }
-                }
-
-                camera.update(&renderer.queue);
-
-                state.camera.position = camera.camera.position().into();
-                state.camera.target = camera.camera.target().into();
-
-                renderer.sync_shapes(&mut scene.shapes);
-
-                match renderer.render(ui, state, window, camera, scene, &mut self.gizmo) {
-                    Ok(_) => {}
-                    Err(SurfaceError::Lost | SurfaceError::Outdated) => {
-                        let size = window.inner_size();
-                        renderer.resize(size.width, size.height);
-                    }
-                    Err(e) => log::error!("Failed to render: {}", e),
-                }
-
-                self.input.end_frame();
-
-                window.request_redraw();
-            }
+            winit::event::WindowEvent::RedrawRequested => self.redraw(),
             _ => {}
+        }
+    }
+}
+
+fn left_mouse_actions(
+    input: &mut Input,
+    state: &mut AppState,
+    scene: &mut Scene,
+    renderer: &Renderer,
+    camera: &CameraManager,
+) {
+    let Some(mouse) = input.take_left_click() else {
+        return;
+    };
+
+    let Some(local) = state.viewport.local_position(mouse) else {
+        return;
+    };
+
+    let is_placement = state
+        .selection
+        .as_ref()
+        .is_some_and(|selection| selection.placement_mode != PlacementMode::None);
+
+    if is_placement {
+        if let Some(point) =
+            input::mouse_local_to_world_space(&state.viewport, &camera.camera, mouse.x, mouse.y)
+        {
+            Application::on_viewport_clicked(scene, state, &point);
+        }
+
+        return;
+    }
+
+    if let Some(selection) = state.selection.as_mut() {
+        let id = selection.picker.pick(
+            &renderer.device,
+            &renderer.queue,
+            &renderer.viewport.id_texture,
+            renderer.viewport_size(),
+            local.x as u32,
+            local.y as u32,
+        );
+
+        selection.picker.set_selected_shape_id(id);
+
+        if id == 0 {
+            state.console.append("Selection cleared");
+        } else {
+            state.console.append(&format!("Selected shape {id}"));
+        }
+    }
+}
+
+fn right_mouse_actions(
+    input: &mut Input,
+    state: &mut AppState,
+    renderer: &Renderer,
+    ui: &mut UIManager,
+) {
+    let Some(mouse) = input.take_right_click() else {
+        return;
+    };
+
+    let Some(local) = state.viewport.local_position(mouse) else {
+        return;
+    };
+
+    if let Some(selection) = state.selection.as_mut() {
+        let id = selection.picker.pick(
+            &renderer.device,
+            &renderer.queue,
+            &renderer.viewport.id_texture,
+            renderer.viewport_size(),
+            local.x as u32,
+            local.y as u32,
+        );
+
+        if id != 0 {
+            ui.open_shape_context_menu(id, mouse);
         }
     }
 }

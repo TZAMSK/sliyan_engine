@@ -57,7 +57,7 @@ impl InspectorPanel {
                     return;
                 };
 
-                ui.label(format!("Selected: {:2}", shape.id));
+                ui.label(format!("Selected: {} ({:2})", shape.name, shape.id));
                 ui.separator();
 
                 let available_height = ui.available_height();

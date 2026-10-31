@@ -1,3 +1,5 @@
+use egui::Options;
+
 use crate::selection::{PlacementMode, SelectionState};
 
 #[derive(Debug)]
@@ -57,6 +59,18 @@ pub struct ViewportState {
     pub hovered: bool,
     pub clicked: bool,
     pub rect: [f32; 4],
+}
+
+impl ViewportState {
+    pub fn local_position(&self, mouse: glm::Vec2) -> Option<glm::Vec2> {
+        let local = mouse - self.position;
+
+        (local.x >= 0.0
+            && local.y >= 0.0
+            && local.x < self.width as f32
+            && local.y < self.height as f32)
+            .then_some(local)
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
