@@ -36,8 +36,23 @@ impl Scene {
         }
     }
 
-    pub fn remove_shape(&mut self, id: u64) {
-        self.shapes.retain(|shape| shape.id != id);
+    pub fn remove_shape(&mut self, id: u64) -> bool {
+        fn remove(shapes: &mut Vec<Shape>, id: u64) -> bool {
+            if let Some(index) = shapes.iter().position(|shape| shape.id == id) {
+                shapes.remove(index);
+                return true;
+            }
+
+            for shape in shapes {
+                if remove(&mut shape.children, id) {
+                    return true;
+                }
+            }
+
+            false
+        }
+
+        remove(&mut self.shapes, id)
     }
 
     pub fn find_shape_by_id_mut(&mut self, id: u64) -> Option<&mut Shape> {

@@ -3,7 +3,7 @@ use transform_gizmo_egui::Gizmo;
 
 use crate::{
     app::app_state::AppState,
-    editor::gizmo::draw_gizmo,
+    editor::gizmo::GizmoApp,
     scene::{camera::CameraManager, Scene},
     ui::panels::title_panel,
 };
@@ -23,6 +23,7 @@ impl ViewportPanel {
         scene: &mut Scene,
         camera: &CameraManager,
         gizmo: &mut Gizmo,
+        gizmo_app: &mut GizmoApp,
     ) -> bool {
         let mut transform_changed = false;
 
@@ -47,7 +48,7 @@ impl ViewportPanel {
                 state.viewport.hovered = response.hovered();
                 state.viewport.clicked = false;
 
-                transform_changed = draw_gizmo(ui, gizmo, scene, state, camera, rect);
+                transform_changed = gizmo_app.draw_gizmo(ui, gizmo, scene, state, camera, rect);
             }
         });
 

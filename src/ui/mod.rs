@@ -14,6 +14,7 @@ use egui_winit::winit::window::Window;
 use egui_winit::State as EguiWinitState;
 use transform_gizmo_egui::Gizmo;
 
+use crate::editor::gizmo::GizmoApp;
 use crate::scene::camera::CameraManager;
 use crate::{app::app_state::AppState, scene::Scene};
 
@@ -23,6 +24,7 @@ pub struct UIManager {
     components: UIComponents,
     egui_renderer: EguiRenderer,
     viewport_texture_id: Option<egui::TextureId>,
+    gizmo_app: GizmoApp,
 }
 
 struct UIComponents {
@@ -32,6 +34,7 @@ struct UIComponents {
     console: panels::ConsolePanel,
     menu_bar: menu::menu_bar::MenuPanel,
     context_menu: menu::context::ContextMenu,
+    gizmo_settings_menu: menu::gizmo_settings::GizmoSettingsMenu,
     toolbar: panels::ToolbarPanel,
 }
 
@@ -66,6 +69,8 @@ impl UIManager {
             wgpu::FilterMode::Linear,
         ));
 
+        let gizmo_app = GizmoApp::new();
+
         Self {
             ctx,
             platform,
@@ -77,9 +82,11 @@ impl UIManager {
                 menu_bar: menu::menu_bar::MenuPanel::new(),
                 toolbar: panels::ToolbarPanel::new(),
                 context_menu: menu::context::ContextMenu::new(),
+                gizmo_settings_menu: menu::gizmo_settings::GizmoSettingsMenu::new(),
             },
             egui_renderer,
             viewport_texture_id,
+            gizmo_app,
         }
     }
 
@@ -107,7 +114,20 @@ impl UIManager {
         self.components.scene.show(ui, state);
         self.components.inspector.show(ui, state, scene);
 
-        self.components.context_menu.show(ui, scene);
+        let viewport_position = state.viewport.position;
+        let relative_offset_viewport_position =
+            egui::Pos2::new(viewport_position.x, viewport_position.y);
+
+        self.components.gizmo_settings_menu.show(
+            ui,
+            relative_offset_viewport_position,
+            &mut self.gizmo_app,
+            &mut state.console,
+        );
+
+        self.components
+            .context_menu
+            .show(ui, scene, &mut state.console);
 
         if let Some(texture_id) = self.viewport_texture_id {
             return self.components.viewport.show(
@@ -117,6 +137,7 @@ impl UIManager {
                 scene,
                 camera,
                 gizmo,
+                &mut self.gizmo_app,
             );
         }
 

@@ -1,5 +1,3 @@
-use egui::Options;
-
 use crate::selection::{PlacementMode, SelectionState};
 
 #[derive(Debug)]

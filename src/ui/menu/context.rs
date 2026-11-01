@@ -1,4 +1,4 @@
-use crate::scene::Scene;
+use crate::{app::app_state::Console, scene::Scene};
 
 pub struct ContextMenu {
     shape_id: Option<u32>,
@@ -18,7 +18,7 @@ impl ContextMenu {
         self.position = position;
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, scene: &mut Scene) {
+    pub fn show(&mut self, ui: &mut egui::Ui, scene: &mut Scene, console: &mut Console) {
         let Some(id) = self.shape_id else {
             return;
         };
@@ -32,6 +32,7 @@ impl ContextMenu {
 
                     if ui.button("Delete").clicked() {
                         scene.remove_shape(id as u64);
+                        console.append(&format!("Deleted shape with id {id}"));
                         self.shape_id = None;
                     }
                 });

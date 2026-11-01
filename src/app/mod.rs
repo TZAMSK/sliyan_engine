@@ -9,7 +9,7 @@ use winit::{application::ApplicationHandler, window::Window};
 
 use crate::{
     app::{
-        app_state::{AppState, ViewportState},
+        app_state::AppState,
         input::{Drag, Input},
     },
     renderer::Renderer,
