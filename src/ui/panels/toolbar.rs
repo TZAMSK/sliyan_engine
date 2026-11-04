@@ -1,6 +1,15 @@
 use egui::{Panel, Popup, PopupCloseBehavior, RectAlign};
 
-use crate::{app::app_state::AppState, ui::dimensions};
+use crate::{
+    app::app_state::AppState,
+    scene::camera::{
+        view_mode::{
+            CameraViewSelector, FrontView, IsometricView, OrthographicView, SideView, TopView,
+        },
+        Camera,
+    },
+    ui::dimensions,
+};
 
 pub struct ToolbarPanel;
 
@@ -9,7 +18,7 @@ impl ToolbarPanel {
         Self
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, state: &mut AppState) {
+    pub fn show(&mut self, ui: &mut egui::Ui, state: &mut AppState, camera: &mut Camera) {
         Panel::top("toolbar")
             .exact_size(dimensions::TOOLBAR_HEIGHT)
             .show(ui, |ui| {
@@ -19,8 +28,21 @@ impl ToolbarPanel {
                     self.apply_options(Popup::menu(&response))
                         .show(|ui| self.menu(ui, state));
 
-                    let _ = ui.button("Iso");
-                    let _ = ui.button("Top XY");
+                    if ui.button("Iso").clicked() {
+                        CameraViewSelector::select::<IsometricView>(camera);
+                    }
+                    if ui.button("Top XY").clicked() {
+                        CameraViewSelector::select::<TopView>(camera);
+                    }
+                    if ui.button("Front XZ").clicked() {
+                        CameraViewSelector::select::<FrontView>(camera);
+                    }
+                    if ui.button("Side YZ").clicked() {
+                        CameraViewSelector::select::<SideView>(camera);
+                    }
+                    if ui.button("Orthographic").clicked() {
+                        CameraViewSelector::select::<OrthographicView>(camera);
+                    }
                 });
             });
     }

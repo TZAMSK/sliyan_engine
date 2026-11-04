@@ -18,9 +18,9 @@ impl ContextMenu {
         self.position = position;
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, scene: &mut Scene, console: &mut Console) {
+    pub fn show(&mut self, ui: &mut egui::Ui, scene: &mut Scene, console: &mut Console) -> bool {
         let Some(id) = self.shape_id else {
-            return;
+            return false;
         };
 
         let response = egui::Area::new(egui::Id::new("mesh_context_menu"))
@@ -38,17 +38,16 @@ impl ContextMenu {
                 });
             });
 
-        let clicked_outside = ui.input(|i| {
-            i.pointer.any_pressed()
-                && i.pointer
-                    .interact_pos()
-                    .is_some_and(|pos| !response.response.rect.contains(pos))
-        });
+        let pointer_pos = ui.ctx().pointer_interact_pos();
+        let over_menu = pointer_pos.is_some_and(|pos| response.response.rect.contains(pos));
 
+        let clicked_outside = ui.input(|i| i.pointer.any_pressed()) && !over_menu;
         let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
 
         if clicked_outside || escape {
             self.shape_id = None;
         }
+
+        over_menu
     }
 }

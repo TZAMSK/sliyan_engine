@@ -57,6 +57,7 @@ pub struct ViewportState {
     pub hovered: bool,
     pub clicked: bool,
     pub rect: [f32; 4],
+    pub pointer_over_overlay: bool,
 }
 
 impl ViewportState {

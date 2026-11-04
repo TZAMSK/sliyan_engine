@@ -105,32 +105,19 @@ impl UIManager {
         ui: &mut egui::Ui,
         state: &mut AppState,
         scene: &mut Scene,
-        camera: &CameraManager,
+        camera: &mut CameraManager,
         gizmo: &mut Gizmo,
     ) -> bool {
         self.components.menu_bar.show(ui, state);
-        self.components.toolbar.show(ui, state);
+        self.components.toolbar.show(ui, state, &mut camera.camera);
         self.components.console.show(ui, state);
         self.components.scene.show(ui, state);
         self.components.inspector.show(ui, state, scene);
 
-        let viewport_position = state.viewport.position;
-        let relative_offset_viewport_position =
-            egui::Pos2::new(viewport_position.x, viewport_position.y);
-
-        self.components.gizmo_settings_menu.show(
-            ui,
-            relative_offset_viewport_position,
-            &mut self.gizmo_app,
-            &mut state.console,
-        );
-
-        self.components
-            .context_menu
-            .show(ui, scene, &mut state.console);
+        let mut transform_changed = false;
 
         if let Some(texture_id) = self.viewport_texture_id {
-            return self.components.viewport.show(
+            transform_changed = self.components.viewport.show(
                 ui,
                 Some(texture_id),
                 state,
@@ -141,7 +128,33 @@ impl UIManager {
             );
         }
 
-        false
+        let ppp = ui.ctx().pixels_per_point();
+        let viewport_position = egui::pos2(
+            state.viewport.position.x / ppp,
+            state.viewport.position.y / ppp,
+        );
+
+        let over_gizmo_menu = self.components.gizmo_settings_menu.show(
+            ui,
+            viewport_position,
+            &mut self.gizmo_app,
+            &mut state.console,
+        );
+
+        let over_context_menu = self
+            .components
+            .context_menu
+            .show(ui, scene, &mut state.console);
+
+        let over_overlay = over_gizmo_menu || over_context_menu;
+        state.viewport.pointer_over_overlay = over_overlay;
+
+        if over_gizmo_menu {
+            state.viewport.hovered = false;
+            state.viewport.clicked = false;
+        }
+
+        transform_changed
     }
 
     pub fn render(
@@ -153,7 +166,7 @@ impl UIManager {
         texture_view: &TextureView,
         state: &mut AppState,
         scene: &mut Scene,
-        camera: &CameraManager,
+        camera: &mut CameraManager,
         gizmo: &mut Gizmo,
     ) -> bool {
         // Get raw input and run egui

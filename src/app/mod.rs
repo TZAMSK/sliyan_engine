@@ -212,6 +212,10 @@ fn left_mouse_actions(
         return;
     };
 
+    if state.viewport.pointer_over_overlay {
+        return;
+    }
+
     let Some(local) = state.viewport.local_position(mouse) else {
         return;
     };
@@ -260,6 +264,10 @@ fn right_mouse_actions(
     let Some(mouse) = input.take_right_click() else {
         return;
     };
+
+    if state.viewport.pointer_over_overlay {
+        return;
+    }
 
     let Some(local) = state.viewport.local_position(mouse) else {
         return;

@@ -16,8 +16,8 @@ impl GizmoSettingsMenu {
         viewport_position: egui::Pos2,
         gizmo: &mut GizmoApp,
         console: &mut Console,
-    ) {
-        egui::Area::new(egui::Id::new("gizmo_settings_menu"))
+    ) -> bool {
+        let response = egui::Area::new(egui::Id::new("gizmo_settings_menu"))
             .order(egui::Order::Foreground)
             .fixed_pos(egui::Pos2::new(
                 viewport_position.x + 10.0,
@@ -25,18 +25,31 @@ impl GizmoSettingsMenu {
             ))
             .show(ui, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    if ui.button("Translation").clicked() {
+                    if ui
+                        .add_sized([120.0, 25.0], egui::Button::new("Translation"))
+                        .clicked()
+                    {
                         gizmo.set_to(GizmoModePicker::Translation, console);
                     }
 
-                    if ui.button("Rotation").clicked() {
+                    if ui
+                        .add_sized([120.0, 25.0], egui::Button::new("Rotation"))
+                        .clicked()
+                    {
                         gizmo.set_to(GizmoModePicker::Rotation, console);
                     }
 
-                    if ui.button("Scale").clicked() {
+                    if ui
+                        .add_sized([120.0, 25.0], egui::Button::new("Scale"))
+                        .clicked()
+                    {
                         gizmo.set_to(GizmoModePicker::Scale, console);
                     }
                 });
             });
+
+        ui.ctx()
+            .pointer_interact_pos()
+            .is_some_and(|pos| response.response.rect.contains(pos))
     }
 }

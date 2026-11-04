@@ -14,6 +14,10 @@ pub struct RenderPipelineBuilder<'a> {
     binding_group_layout: Vec<wgpu::BindGroupLayout>,
     topology: PrimitiveTopology,
     id_format: Option<TextureFormat>,
+    cull_mode: Option<wgpu::Face>,
+    depth_write_enabled: bool,
+    id_write_enabled: bool,
+    depth_compare: CompareFunction,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -26,6 +30,10 @@ impl<'a> RenderPipelineBuilder<'a> {
             binding_group_layout: Vec::new(),
             topology: PrimitiveTopology::TriangleList,
             id_format: None,
+            cull_mode: None,
+            depth_write_enabled: true,
+            id_write_enabled: true,
+            depth_compare: CompareFunction::Less,
         }
     }
 
@@ -51,6 +59,26 @@ impl<'a> RenderPipelineBuilder<'a> {
 
     pub fn with_id_format(mut self) -> Self {
         self.id_format = Some(TextureFormat::R32Uint);
+        self
+    }
+
+    pub fn with_cull_mode(mut self, mode: wgpu::Face) -> Self {
+        self.cull_mode = Some(mode);
+        self
+    }
+
+    pub fn without_depth_write(mut self) -> Self {
+        self.depth_write_enabled = false;
+        self
+    }
+
+    pub fn without_id_write(mut self) -> Self {
+        self.id_write_enabled = false;
+        self
+    }
+
+    pub fn with_depth_compare(mut self, compare: CompareFunction) -> Self {
+        self.depth_compare = compare;
         self
     }
 
@@ -86,7 +114,11 @@ impl<'a> RenderPipelineBuilder<'a> {
             targets.push(Some(ColorTargetState {
                 format: id_format,
                 blend: None,
-                write_mask: ColorWrites::ALL,
+                write_mask: if self.id_write_enabled {
+                    ColorWrites::ALL
+                } else {
+                    ColorWrites::empty()
+                },
             }));
         }
 
@@ -111,15 +143,15 @@ impl<'a> RenderPipelineBuilder<'a> {
                     topology: self.topology,
                     strip_index_format: None,
                     front_face: FrontFace::Ccw,
-                    cull_mode: None,
+                    cull_mode: self.cull_mode,
                     polygon_mode: PolygonMode::Fill,
                     unclipped_depth: false,
                     conservative: false,
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: TextureFormat::Depth32Float,
-                    depth_write_enabled: Some(true),
-                    depth_compare: Some(CompareFunction::Less),
+                    depth_write_enabled: Some(self.depth_write_enabled),
+                    depth_compare: Some(self.depth_compare),
                     stencil: StencilState::default(),
                     bias: DepthBiasState::default(),
                 }),

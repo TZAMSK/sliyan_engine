@@ -1,6 +1,6 @@
 struct CameraUniform {
     view_proj: mat4x4<f32>,
-};
+}
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 
@@ -13,7 +13,8 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) color: vec3<f32>,
-    @location(1) @interpolate(flat) id: u32,
+    @interpolate(flat)
+    @location(1) id: u32,
 }
 
 struct FragmentOutput {

@@ -62,7 +62,9 @@ impl ViewportRenderer {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::R32Uint,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 

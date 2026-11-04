@@ -1,6 +1,5 @@
 use wgpu::util::DeviceExt;
-
-mod view;
+pub mod view_mode;
 
 pub struct CameraManager {
     pub camera: Camera,
@@ -172,6 +171,12 @@ impl Camera {
 
         self.camera_movement.yaw = offset.y.atan2(offset.x).to_degrees();
         self.camera_movement.pitch = (offset.z / radius).asin().to_degrees();
+    }
+
+    pub fn set_view(&mut self, positition: glm::Vec3, target: glm::Vec3, up: glm::Vec3) {
+        self.position = positition;
+        self.target = target;
+        self.up = up
     }
 }
 

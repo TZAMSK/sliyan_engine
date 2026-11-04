@@ -72,4 +72,22 @@ impl Scene {
 
         find(&mut self.shapes, id)
     }
+
+    pub fn find_shape_by_id(&self, id: u64) -> Option<&Shape> {
+        fn find(shapes: &[Shape], id: u64) -> Option<&Shape> {
+            for shape in shapes {
+                if shape.id == id {
+                    return Some(shape);
+                }
+
+                if let Some(found) = find(&shape.children, id) {
+                    return Some(found);
+                }
+            }
+
+            None
+        }
+
+        find(&self.shapes, id)
+    }
 }
