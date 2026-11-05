@@ -18,6 +18,7 @@ pub struct RenderPipelineBuilder<'a> {
     depth_write_enabled: bool,
     id_write_enabled: bool,
     depth_compare: CompareFunction,
+    front_face: FrontFace,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -34,6 +35,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             depth_write_enabled: true,
             id_write_enabled: true,
             depth_compare: CompareFunction::Less,
+            front_face: FrontFace::Ccw,
         }
     }
 
@@ -79,6 +81,11 @@ impl<'a> RenderPipelineBuilder<'a> {
 
     pub fn with_depth_compare(mut self, compare: CompareFunction) -> Self {
         self.depth_compare = compare;
+        self
+    }
+
+    pub fn with_front_face(mut self, front_face: FrontFace) -> Self {
+        self.front_face = front_face;
         self
     }
 
@@ -142,7 +149,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 primitive: PrimitiveState {
                     topology: self.topology,
                     strip_index_format: None,
-                    front_face: FrontFace::Ccw,
+                    front_face: self.front_face,
                     cull_mode: self.cull_mode,
                     polygon_mode: PolygonMode::Fill,
                     unclipped_depth: false,

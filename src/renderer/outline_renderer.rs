@@ -17,7 +17,7 @@ impl OutlineRenderer {
     pub fn new(device: &wgpu::Device) -> Self {
         let uniform = OutlineUniform {
             center: [0.0; 3],
-            thickness: 1.05,
+            thickness: 1.03,
         };
 
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

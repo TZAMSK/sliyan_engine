@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use transform_gizmo_egui::Gizmo;
 use wgpu::{
-    Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp, Operations,
-    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    RenderPipeline, RequestAdapterOptions, StoreOp, Surface, SurfaceColorSpace,
-    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, hal::SurfaceError,
+    hal::SurfaceError, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp,
+    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RequestAdapterOptions, StoreOp, Surface,
+    SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -21,9 +21,9 @@ use crate::{
         pipeline::RenderPipelineBuilder, viewport_renderer::ViewportRenderer,
     },
     scene::{
-        Scene,
         camera::CameraManager,
         shape::{Mesh, Shape},
+        Scene,
     },
     ui::UIManager,
 };
@@ -180,7 +180,7 @@ impl Renderer {
             let center = shape.transform.position;
 
             self.outline
-                .update(&self.queue, [center.x, center.y, center.z], 1.05);
+                .update(&self.queue, [center.x, center.y, center.z], 1.03);
         }
 
         let mut encoder = self
@@ -240,19 +240,6 @@ impl Renderer {
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
             self.grid.draw(&mut render_pass);
 
-            // Outline
-            if let Some(shape) = selected_shape {
-                if let (Some(buffer), num_vertices) =
-                    (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
-                {
-                    render_pass.set_pipeline(outline_pipeline);
-                    render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.outline.bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, buffer.slice(..));
-                    render_pass.draw(0..*num_vertices as u32, 0..1);
-                }
-            }
-
             // Normal shapes
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
@@ -262,6 +249,19 @@ impl Renderer {
                     (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
                 {
                     render_pass.set_vertex_buffer(0, buf.slice(..));
+                    render_pass.draw(0..*num_vertices as u32, 0..1);
+                }
+            }
+
+            // Outline
+            if let Some(shape) = selected_shape {
+                if let (Some(buffer), num_vertices) =
+                    (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
+                {
+                    render_pass.set_pipeline(outline_pipeline);
+                    render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.outline.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, buffer.slice(..));
                     render_pass.draw(0..*num_vertices as u32, 0..1);
                 }
             }
@@ -320,6 +320,7 @@ impl Renderer {
                 .with_vertex_layout(Mesh::vertex_layout())
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
                 .with_binding_group_layout(&self.outline.bind_group_layout)
+                .with_front_face(wgpu::FrontFace::Cw)
                 .with_cull_mode(wgpu::Face::Front)
                 .with_depth_compare(wgpu::CompareFunction::LessEqual)
                 .without_depth_write()
