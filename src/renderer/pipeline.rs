@@ -1,9 +1,9 @@
 use wgpu::{
-    ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, Device, FragmentState,
-    FrontFace, MultisampleState, PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode,
-    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModuleDescriptor, ShaderSource, StencilState, TextureFormat, VertexBufferLayout,
-    VertexState,
+    BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, Device,
+    FragmentState, FrontFace, MultisampleState, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline,
+    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, TextureFormat,
+    VertexBufferLayout, VertexState,
 };
 
 pub struct RenderPipelineBuilder<'a> {
@@ -15,10 +15,12 @@ pub struct RenderPipelineBuilder<'a> {
     topology: PrimitiveTopology,
     id_format: Option<TextureFormat>,
     cull_mode: Option<wgpu::Face>,
+    depth_enabled: bool,
     depth_write_enabled: bool,
     id_write_enabled: bool,
     depth_compare: CompareFunction,
     front_face: FrontFace,
+    blend: Option<BlendState>,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -32,10 +34,12 @@ impl<'a> RenderPipelineBuilder<'a> {
             topology: PrimitiveTopology::TriangleList,
             id_format: None,
             cull_mode: None,
+            depth_enabled: true,
             depth_write_enabled: true,
             id_write_enabled: true,
             depth_compare: CompareFunction::Less,
             front_face: FrontFace::Ccw,
+            blend: None,
         }
     }
 
@@ -69,6 +73,11 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    pub fn without_depth(mut self) -> Self {
+        self.depth_enabled = false;
+        self
+    }
+
     pub fn without_depth_write(mut self) -> Self {
         self.depth_write_enabled = false;
         self
@@ -89,11 +98,15 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    pub fn with_blend(mut self, blend: BlendState) -> Self {
+        self.blend = Some(blend);
+        self
+    }
+
     pub fn build(self) -> Result<RenderPipeline, PipelineError> {
         let shader = self.shader.ok_or(PipelineError::MissingShader)?;
-        let vertex_layout = self
-            .vertex_layout
-            .ok_or(PipelineError::MissingVertexLayout)?;
+        let vertex_layouts: Vec<VertexBufferLayout<'static>> =
+            self.vertex_layout.into_iter().collect();
 
         let shader_module = self.device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -113,7 +126,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
         let mut targets = vec![Some(ColorTargetState {
             format: self.format,
-            blend: None,
+            blend: self.blend,
             write_mask: ColorWrites::ALL,
         })];
 
@@ -137,7 +150,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 vertex: VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers: &[Some(vertex_layout)],
+                    buffers: &vertex_layouts.iter().cloned().map(Some).collect::<Vec<_>>(),
                     compilation_options: PipelineCompilationOptions::default(),
                 },
                 fragment: Some(FragmentState {
@@ -155,13 +168,17 @@ impl<'a> RenderPipelineBuilder<'a> {
                     unclipped_depth: false,
                     conservative: false,
                 },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: TextureFormat::Depth32Float,
-                    depth_write_enabled: Some(self.depth_write_enabled),
-                    depth_compare: Some(self.depth_compare),
-                    stencil: StencilState::default(),
-                    bias: DepthBiasState::default(),
-                }),
+                depth_stencil: if self.depth_enabled {
+                    Some(wgpu::DepthStencilState {
+                        format: TextureFormat::Depth32Float,
+                        depth_write_enabled: Some(self.depth_write_enabled),
+                        depth_compare: Some(self.depth_compare),
+                        stencil: StencilState::default(),
+                        bias: DepthBiasState::default(),
+                    })
+                } else {
+                    None
+                },
                 multisample: MultisampleState {
                     count: 1,
                     mask: !0,

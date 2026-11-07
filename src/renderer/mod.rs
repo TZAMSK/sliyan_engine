@@ -37,7 +37,12 @@ pub struct Renderer {
     pub viewport: ViewportRenderer,
     grid_pipeline: Option<RenderPipeline>,
     grid: GridAxisRenderer,
-    outline_pipeline: Option<RenderPipeline>,
+
+    /*outline_pipeline: Option<RenderPipeline>,
+        outline: OutlineRenderer,
+    */
+    mask_pipeline: Option<RenderPipeline>,
+    composite_pipeline: Option<RenderPipeline>,
     outline: OutlineRenderer,
 }
 
@@ -103,7 +108,7 @@ impl Renderer {
 
         let grid = GridAxisRenderer::new(&device);
 
-        let outline = OutlineRenderer::new(&device);
+        let outline = OutlineRenderer::new(&device, &viewport);
 
         Ok(Self {
             surface,
@@ -114,7 +119,8 @@ impl Renderer {
             viewport,
             grid_pipeline: None,
             grid,
-            outline_pipeline: None,
+            mask_pipeline: None,
+            composite_pipeline: None,
             outline,
         })
     }
@@ -140,9 +146,12 @@ impl Renderer {
         scene: &mut Scene,
         gizmo: &mut Gizmo,
     ) -> Result<(), SurfaceError> {
-        let (Some(pipeline), Some(grid_pipeline), Some(outline_pipeline)) =
-            (&self.pipeline, &self.grid_pipeline, &self.outline_pipeline)
-        else {
+        let (Some(pipeline), Some(grid_pipeline), Some(mask_pipeline), Some(composite_pipeline)) = (
+            &self.pipeline,
+            &self.grid_pipeline,
+            &self.mask_pipeline,
+            &self.composite_pipeline,
+        ) else {
             return Ok(());
         };
 
@@ -175,14 +184,6 @@ impl Renderer {
             .filter(|&id| id != 0)
             .and_then(|id| scene.find_shape_by_id(id as u64));
 
-        // Outline uniform update
-        if let Some(shape) = selected_shape {
-            let center = shape.transform.position;
-
-            self.outline
-                .update(&self.queue, [center.x, center.y, center.z], 1.03);
-        }
-
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -190,6 +191,7 @@ impl Renderer {
             });
 
         {
+            // Normal render pass
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("3D Render Pass"),
                 color_attachments: &[
@@ -252,19 +254,62 @@ impl Renderer {
                     render_pass.draw(0..*num_vertices as u32, 0..1);
                 }
             }
+        }
 
-            // Outline
+        {
+            // Outline Renderpass A
+
+            let mut outline_render_pass_a = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Selection Mask Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.viewport.mask_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(wgpu::Color::BLACK),
+                        store: StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            // Outline A
             if let Some(shape) = selected_shape {
-                if let (Some(buffer), num_vertices) =
-                    (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
-                {
-                    render_pass.set_pipeline(outline_pipeline);
-                    render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.outline.bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, buffer.slice(..));
-                    render_pass.draw(0..*num_vertices as u32, 0..1);
+                if let Some(buffer) = &shape.mesh.vertex_buffer {
+                    outline_render_pass_a.set_pipeline(mask_pipeline);
+                    outline_render_pass_a.set_bind_group(0, &camera.camera_bind_group, &[]);
+                    outline_render_pass_a.set_vertex_buffer(0, buffer.slice(..));
+                    outline_render_pass_a.draw(0..shape.mesh.vertex_count() as u32, 0..1);
                 }
             }
+        }
+
+        {
+            // Outline Renderpass B
+            let mut outline_render_pass_b = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Outline Composite Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.viewport.view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            // Outline B
+            outline_render_pass_b.set_pipeline(composite_pipeline);
+            outline_render_pass_b.set_bind_group(0, &self.outline.composite_bind_group, &[]);
+            outline_render_pass_b.draw(0..3, 0..1);
         }
 
         let tranform_changed = ui.render(
@@ -313,21 +358,25 @@ impl Renderer {
                 .expect("Couldn't create grid_pipeline"),
         );
 
-        // Grid shader
-        self.outline_pipeline = Some(
-            RenderPipelineBuilder::new(&self.device, self.config.format)
-                .with_shader(include_str!("shaders/outline_shader.wgsl"))
+        // Outline shader
+        self.mask_pipeline = Some(
+            RenderPipelineBuilder::new(&self.device, wgpu::TextureFormat::R8Unorm)
+                .with_shader(include_str!("shaders/selection_mask.wgsl"))
                 .with_vertex_layout(Mesh::vertex_layout())
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
-                .with_binding_group_layout(&self.outline.bind_group_layout)
-                .with_front_face(wgpu::FrontFace::Cw)
-                .with_cull_mode(wgpu::Face::Front)
-                .with_depth_compare(wgpu::CompareFunction::LessEqual)
-                .without_depth_write()
-                .without_id_write()
-                .with_id_format()
+                .without_depth()
                 .build()
-                .expect("Couldn't create outline_pipeline"),
+                .expect("Couldn't create mask pipeline"),
+        );
+
+        self.composite_pipeline = Some(
+            RenderPipelineBuilder::new(&self.device, self.config.format)
+                .with_shader(include_str!("shaders/outline_composite.wgsl"))
+                .with_binding_group_layout(&self.outline.composite_bind_group_layout)
+                .with_blend(wgpu::BlendState::ALPHA_BLENDING)
+                .without_depth()
+                .build()
+                .expect("Couldn't create composite pipeline"),
         );
     }
 
@@ -340,7 +389,8 @@ impl Renderer {
     }
 
     pub fn resize_viewport(&mut self, width: u32, height: u32) {
-        self.viewport.resize(&self.device, width, height)
+        self.viewport.resize(&self.device, width, height);
+        self.outline.resize(&self.device, &self.viewport);
     }
 
     pub fn viewport_size(&self) -> (u32, u32) {

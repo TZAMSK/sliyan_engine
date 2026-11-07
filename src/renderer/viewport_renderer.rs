@@ -10,6 +10,8 @@ pub struct ViewportRenderer {
     pub depth_view: TextureView,
     pub id_texture: Texture,
     pub id_view: TextureView,
+    pub mask_texture: Texture,
+    pub mask_view: TextureView,
     pub format: TextureFormat,
     pub width: u32,
     pub height: u32,
@@ -70,6 +72,23 @@ impl ViewportRenderer {
 
         let id_view = id_texture.create_view(&TextureViewDescriptor::default());
 
+        let mask_texture = device.create_texture(&TextureDescriptor {
+            label: Some("Selection texture"),
+            size: Extent3d {
+                depth_or_array_layers: 1,
+                width,
+                height,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let mask_view = mask_texture.create_view(&TextureViewDescriptor::default());
+
         Self {
             texture,
             view,
@@ -80,6 +99,8 @@ impl ViewportRenderer {
             format,
             width,
             height,
+            mask_texture,
+            mask_view,
         }
     }
 
