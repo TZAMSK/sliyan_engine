@@ -63,9 +63,11 @@ impl GizmoApp {
             return false;
         }
 
-        let Some(shape) = scene.find_shape_by_id_mut(id as u64) else {
+        let Some(shape_ref) = scene.find_shape_by_id_mut(id as u64) else {
             return false;
         };
+
+        let mut shape = shape_ref.borrow_mut();
 
         let position = shape.transform.position;
         let rotation = shape.transform.rotation;

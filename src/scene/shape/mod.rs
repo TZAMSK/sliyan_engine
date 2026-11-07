@@ -5,10 +5,13 @@ use std::{
 
 use wgpu::{BufferAddress, VertexBufferLayout, VertexStepMode};
 
-use crate::scene::shape::{
-    round::RoundProperties,
-    three_dimensions::{cube::Cube, sphere::Sphere},
-    two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
+use crate::scene::{
+    shape::{
+        round::RoundProperties,
+        three_dimensions::{cube::Cube, sphere::Sphere},
+        two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
+    },
+    ShapeRef,
 };
 
 mod round;
@@ -49,7 +52,7 @@ pub struct Shape {
     pub physics_body: PhysicsBody,
     pub properties: Properties,
     pub shape_type: ShapeType,
-    pub children: Vec<Shape>,
+    pub children: Vec<ShapeRef>,
     pub parent: Option<u64>,
 }
 
@@ -200,16 +203,19 @@ impl Shape {
     }
 
     fn is_parent(&self) -> bool {
-        self.parent.is_some()
+        !self.children.is_empty()
     }
 
     pub fn set_position(&mut self, position: glm::Vec3) {
         let delta = position - self.transform.position;
         self.transform.position = position;
 
-        for child in self.children.iter_mut() {
+        for child in &self.children {
+            let mut child = child.borrow_mut();
+
             if child.physics_body.following_parent {
-                child.set_position(child.transform.position + delta)
+                let position = child.transform.position + delta;
+                child.set_position(position);
             }
         }
     }
@@ -218,9 +224,12 @@ impl Shape {
         let delta = rotation - self.transform.rotation;
         self.transform.rotation = rotation;
 
-        for child in &mut self.children {
+        for child in &self.children {
+            let mut child = child.borrow_mut();
+
             if child.physics_body.following_parent {
-                child.set_rotation(child.transform.rotation + delta)
+                let rotation = child.transform.rotation + delta;
+                child.set_rotation(rotation);
             }
         }
     }
@@ -238,32 +247,39 @@ impl Shape {
 
         let ratio = scale.component_div(&old_scale);
 
-        for child in &mut self.children {
+        for child in &self.children {
+            let mut child = child.borrow_mut();
             if child.physics_body.following_parent {
-                child.set_position(child.transform.scale.component_mul(&ratio));
+                let scale = child.transform.scale.component_mul(&ratio);
+                child.set_position(scale);
             }
         }
     }
 
-    fn add_child(&mut self, mut child: Shape) {
-        if child.id == self.id {
+    pub fn add_child(&mut self, child: ShapeRef) {
+        let child_id = child.borrow().id;
+
+        if child_id == self.id {
             return;
         }
 
-        child.parent = Some(self.id);
+        if self.children.iter().any(|c| c.borrow().id == child_id) {
+            return;
+        }
 
+        child.borrow_mut().parent = Some(self.id);
         self.children.push(child);
     }
 
-    fn remove_child(&mut self, child_id: u64) -> Option<Shape> {
+    pub fn remove_child(&mut self, child_id: u64) -> Option<ShapeRef> {
         let index = self
             .children
             .iter()
-            .position(|child| child.id == child_id)?;
+            .position(|child| child.borrow().id == child_id)?;
 
-        let mut child = self.children.remove(index);
+        let child = self.children.remove(index);
 
-        child.parent = None;
+        child.borrow_mut().parent = None;
 
         Some(child)
     }

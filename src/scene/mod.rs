@@ -1,6 +1,8 @@
 pub mod camera;
 pub mod shape;
 
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     scene::shape::{
         three_dimensions::{cube::Cube, sphere::Sphere},
@@ -9,85 +11,73 @@ use crate::{
     },
     selection::{PlacementMode, SelectionState},
 };
+pub type ShapeRef = Rc<RefCell<Shape>>;
 
 pub struct Scene {
-    pub shapes: Vec<Shape>,
+    pub shapes: Vec<ShapeRef>,
 }
 
 impl Scene {
     pub fn add_shape(&mut self, shape_selected: &SelectionState, position: &glm::Vec3) {
-        match shape_selected.placement_mode {
-            PlacementMode::Triangle => self.shapes.push(
-                Triangle::new("Triangle", *position, glm::Vec4::new(0.5, 1.0, 1.0, 1.0)).shape,
-            ),
-            PlacementMode::Rectangle => self.shapes.push(
-                Rectangle::new("Rectangle", *position, glm::Vec4::new(1.0, 0.5, 1.0, 1.0)).shape,
-            ),
-            PlacementMode::Circle => self
-                .shapes
-                .push(Circle::new("Circle", *position, glm::Vec4::new(1.0, 1.0, 0.5, 1.0)).shape),
-            PlacementMode::Cube => self
-                .shapes
-                .push(Cube::new("Cube", *position, glm::Vec4::new(1.0, 0.5, 0.5, 1.0)).shape),
-            PlacementMode::Sphere => self
-                .shapes
-                .push(Sphere::new("Sphere", *position, glm::Vec4::new(0.5, 0.5, 1.0, 1.0)).shape),
-            _ => {}
-        }
+        let shape = match shape_selected.placement_mode {
+            PlacementMode::Triangle => {
+                Triangle::new("Triangle", *position, glm::Vec4::new(0.5, 1.0, 1.0, 1.0)).shape
+            }
+            PlacementMode::Rectangle => {
+                Rectangle::new("Rectangle", *position, glm::Vec4::new(1.0, 0.5, 1.0, 1.0)).shape
+            }
+
+            PlacementMode::Circle => {
+                Circle::new("Circle", *position, glm::Vec4::new(1.0, 1.0, 0.5, 1.0)).shape
+            }
+            PlacementMode::Cube => {
+                Cube::new("Cube", *position, glm::Vec4::new(1.0, 0.5, 0.5, 1.0)).shape
+            }
+            PlacementMode::Sphere => {
+                Sphere::new("Sphere", *position, glm::Vec4::new(0.5, 0.5, 1.0, 1.0)).shape
+            }
+            _ => return,
+        };
+
+        self.shapes.push(Rc::new(RefCell::new(shape)));
     }
 
     pub fn remove_shape(&mut self, id: u64) -> bool {
-        fn remove(shapes: &mut Vec<Shape>, id: u64) -> bool {
-            if let Some(index) = shapes.iter().position(|shape| shape.id == id) {
-                shapes.remove(index);
-                return true;
-            }
+        let Some(index) = self.shapes.iter().position(|shape| shape.borrow().id == id) else {
+            return false;
+        };
 
-            for shape in shapes {
-                if remove(&mut shape.children, id) {
-                    return true;
-                }
-            }
+        let shape = self.shapes.remove(index);
 
-            false
+        let (parent_id, children) = {
+            let mut shape = shape.borrow_mut();
+            (shape.parent.take(), std::mem::take(&mut shape.children))
+        };
+
+        if let Some(parent_id) = parent_id {
+            if let Some(parent) = self.find_shape_by_id(parent_id) {
+                parent
+                    .borrow_mut()
+                    .children
+                    .retain(|child| child.borrow().id != id);
+            }
         }
 
-        remove(&mut self.shapes, id)
+        for child in children {
+            child.borrow_mut().parent = None;
+        }
+
+        true
     }
 
-    pub fn find_shape_by_id_mut(&mut self, id: u64) -> Option<&mut Shape> {
-        fn find(shapes: &mut [Shape], id: u64) -> Option<&mut Shape> {
-            for shape in shapes.iter_mut() {
-                if shape.id == id {
-                    return Some(shape);
-                }
-
-                if let Some(found) = find(&mut shape.children, id) {
-                    return Some(found);
-                }
-            }
-
-            None
-        }
-
-        find(&mut self.shapes, id)
+    pub fn find_shape_by_id(&self, id: u64) -> Option<ShapeRef> {
+        self.shapes
+            .iter()
+            .find(|shape| shape.borrow().id == id)
+            .cloned()
     }
 
-    pub fn find_shape_by_id(&self, id: u64) -> Option<&Shape> {
-        fn find(shapes: &[Shape], id: u64) -> Option<&Shape> {
-            for shape in shapes {
-                if shape.id == id {
-                    return Some(shape);
-                }
-
-                if let Some(found) = find(&shape.children, id) {
-                    return Some(found);
-                }
-            }
-
-            None
-        }
-
-        find(&self.shapes, id)
+    pub fn find_shape_by_id_mut(&mut self, id: u64) -> Option<ShapeRef> {
+        self.find_shape_by_id(id)
     }
 }

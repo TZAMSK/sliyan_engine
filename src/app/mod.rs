@@ -1,7 +1,7 @@
 pub mod app_state;
 mod input;
 
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use transform_gizmo_egui::Gizmo;
 use wgpu::hal::SurfaceError;
@@ -13,7 +13,7 @@ use crate::{
         input::{Drag, Input},
     },
     renderer::Renderer,
-    scene::{camera::CameraManager, shape::three_dimensions::cube::Cube, Scene},
+    scene::{Scene, camera::CameraManager, shape::three_dimensions::cube::Cube},
     selection::PlacementMode,
     ui::UIManager,
 };
@@ -38,7 +38,7 @@ impl Application {
         );
 
         let scene = Scene {
-            shapes: vec![cube.shape],
+            shapes: vec![Rc::new(RefCell::new(cube.shape))],
         };
 
         Self {

@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use transform_gizmo_egui::Gizmo;
 use wgpu::{
-    Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp, Operations,
-    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    RenderPipeline, RequestAdapterOptions, StoreOp, Surface, SurfaceColorSpace,
-    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, hal::SurfaceError,
+    hal::SurfaceError, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp,
+    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RequestAdapterOptions, StoreOp, Surface,
+    SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -21,9 +21,9 @@ use crate::{
         pipeline::RenderPipelineBuilder, viewport_renderer::ViewportRenderer,
     },
     scene::{
-        Scene,
         camera::CameraManager,
-        shape::{Mesh, Shape},
+        shape::{Mesh, Transform},
+        Scene, ShapeRef,
     },
     ui::UIManager,
 };
@@ -46,16 +46,30 @@ pub struct Renderer {
     outline: OutlineRenderer,
 }
 
-fn upload_shapes(shapes: &mut [Shape], device: &Device, queue: &Queue) {
-    for shape in shapes {
-        if !shape.mesh.vertices.is_empty() {
-            shape
-                .mesh
-                .upload_to_gpu(device, &shape.transform, &shape.material.color, shape.id);
+fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
+    for shape_ref in shapes {
+        let mut shape = shape_ref.borrow_mut();
 
-            if let Some(buffer) = &shape.mesh.vertex_buffer {
-                queue.write_buffer(buffer, 0, &shape.mesh.vertex_data);
-            }
+        if shape.mesh.vertices.is_empty() {
+            return;
+        }
+
+        let position = shape.transform.position;
+        let rotation = shape.transform.rotation;
+        let scale = shape.transform.scale;
+        let color = shape.material.color;
+        let id = shape.id;
+
+        let transform = Transform {
+            position,
+            rotation,
+            scale,
+        };
+
+        shape.mesh.upload_to_gpu(device, &transform, &color, id);
+
+        if let Some(buffer) = &shape.mesh.vertex_buffer {
+            queue.write_buffer(buffer, 0, &shape.mesh.vertex_data);
         }
 
         upload_shapes(&mut shape.children, device, &queue);
@@ -63,7 +77,7 @@ fn upload_shapes(shapes: &mut [Shape], device: &Device, queue: &Queue) {
 }
 
 impl Renderer {
-    pub async fn new(window: &Arc<Window>, shapes: &mut [Shape]) -> anyhow::Result<Self> {
+    pub async fn new(window: &Arc<Window>, shapes: &mut [ShapeRef]) -> anyhow::Result<Self> {
         let instance = Instance::default();
         let surface = instance.create_surface(window.clone())?;
 
@@ -246,7 +260,9 @@ impl Renderer {
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
 
-            for shape in &scene.shapes {
+            for shape_ref in &scene.shapes {
+                let shape = shape_ref.borrow();
+
                 if let (Some(buf), num_vertices) =
                     (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
                 {
@@ -277,7 +293,9 @@ impl Renderer {
             });
 
             // Outline A
-            if let Some(shape) = selected_shape {
+            if let Some(shape_ref) = selected_shape {
+                let shape = shape_ref.borrow();
+
                 if let Some(buffer) = &shape.mesh.vertex_buffer {
                     outline_render_pass_a.set_pipeline(mask_pipeline);
                     outline_render_pass_a.set_bind_group(0, &camera.camera_bind_group, &[]);
@@ -390,7 +408,7 @@ impl Renderer {
         );
     }
 
-    pub fn sync_shapes(&mut self, shapes: &mut [Shape]) {
+    pub fn sync_shapes(&mut self, shapes: &mut [ShapeRef]) {
         upload_shapes(shapes, &self.device, &self.queue);
     }
 

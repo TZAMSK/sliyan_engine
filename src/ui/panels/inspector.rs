@@ -1,3 +1,5 @@
+use std::os::unix::process::parent_id;
+
 use egui::Panel;
 use egui_winit::egui::Color32;
 
@@ -55,10 +57,12 @@ impl InspectorPanel {
                     return;
                 }
 
-                let Some(shape) = scene.find_shape_by_id_mut(id as u64) else {
+                let Some(shape_ref) = scene.find_shape_by_id_mut(id as u64) else {
                     ui.label("Shape not found");
                     return;
                 };
+
+                let mut shape = shape_ref.borrow_mut();
 
                 ui.label(format!("Selected: {} ({:2})", shape.name, shape.id));
                 ui.separator();
@@ -88,8 +92,9 @@ impl InspectorPanel {
                             ));
 
                             match self.active_tab {
-                                0 => draw_color_tab(ui, shape),
-                                1 => draw_transform_tab(ui, shape),
+                                0 => draw_color_tab(ui, &mut shape),
+                                1 => draw_transform_tab(ui, &mut shape),
+                                2 => draw_hierarchy_tab(ui, &mut shape),
                                 _ => {}
                             }
                         });
@@ -201,4 +206,23 @@ fn draw_vec3(ui: &mut egui::Ui, label: &str, value: &mut glm::Vec3, speed: f64) 
 
 fn format_vec3(v: [f32; 3]) -> String {
     format!("{:2}, {:2}, {:2}", v[0], v[1], v[2])
+}
+
+fn draw_hierarchy_tab(ui: &mut egui::Ui, shape: &mut Shape) {
+    ui.vertical(|ui| {
+        if let Some(parent_id) = shape.parent {
+            ui.label(format!("Parent: {}", parent_id));
+        } else {
+            ui.label("No parent");
+        }
+
+        if shape.children.is_empty() {
+            ui.label("No children");
+        }
+
+        for child_ref in &shape.children {
+            let child = child_ref.borrow();
+            ui.label(format!("{} ({})", child.name, child.id));
+        }
+    });
 }
