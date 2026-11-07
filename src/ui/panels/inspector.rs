@@ -3,7 +3,10 @@ use egui_winit::egui::Color32;
 
 use crate::{
     app::app_state::AppState,
-    scene::{shape::Shape, Scene},
+    scene::{
+        shape::{Properties, Shape},
+        Scene,
+    },
     ui::{dimensions, panels::title_panel},
 };
 
@@ -148,21 +151,51 @@ fn draw_transform_tab(ui: &mut egui::Ui, shape: &mut Shape) {
         draw_vec3(ui, "Position", &mut shape.transform.position, 0.05);
         draw_vec3(ui, "Rotation", &mut shape.transform.rotation, 0.05);
         draw_vec3(ui, "Scale", &mut shape.transform.scale, 0.05);
+
+        let mut proprties_changed = false;
+        if let Properties::Round(properties) = &mut shape.properties {
+            ui.label("Radius");
+            proprties_changed |= ui
+                .add_sized(
+                    [ui.available_width(), 30.0],
+                    egui::DragValue::new(&mut properties.radius)
+                        .speed(0.05)
+                        .range(0.01..=1000.0),
+                )
+                .changed();
+
+            ui.label("Segments");
+            proprties_changed |= ui
+                .add_sized(
+                    [ui.available_width(), 30.0],
+                    egui::DragValue::new(&mut properties.segments)
+                        .speed(1.0)
+                        .range(3..=128),
+                )
+                .changed();
+        }
+
+        if proprties_changed {
+            shape.rebuild_mesh();
+        }
     });
 }
 
 fn draw_vec3(ui: &mut egui::Ui, label: &str, value: &mut glm::Vec3, speed: f64) {
     ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.x = 8.0;
 
         ui.label(label);
 
-        ui.horizontal(|ui| {
-            for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
+        for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
+            ui.horizontal(|ui| {
                 ui.label(*axis);
-                ui.add(egui::DragValue::new(&mut value[i]).speed(speed));
-            }
-        });
+                ui.add_sized(
+                    [ui.available_width(), 30.0],
+                    egui::DragValue::new(&mut value[i]).speed(speed),
+                );
+            });
+        }
     });
 }
 

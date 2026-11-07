@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use transform_gizmo_egui::Gizmo;
 use wgpu::{
-    hal::SurfaceError, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp,
-    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipeline, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor,
+    Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Instance, LoadOp, Operations,
+    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RenderPipeline, RequestAdapterOptions, StoreOp, Surface, SurfaceColorSpace,
+    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, hal::SurfaceError,
 };
 use winit::window::Window;
 
@@ -21,9 +21,9 @@ use crate::{
         pipeline::RenderPipelineBuilder, viewport_renderer::ViewportRenderer,
     },
     scene::{
+        Scene,
         camera::CameraManager,
         shape::{Mesh, Shape},
-        Scene,
     },
     ui::UIManager,
 };
@@ -335,6 +335,12 @@ impl Renderer {
     }
 
     pub fn build_pipeline(&mut self, camera: &CameraManager) {
+        self.build_normal_pipeline(&camera);
+        self.build_grid_pipeline(&camera);
+        self.build_outline_pipeline(&camera);
+    }
+
+    fn build_normal_pipeline(&mut self, camera: &CameraManager) {
         // Normal expected shader
         self.pipeline = Some(
             RenderPipelineBuilder::new(&self.device, self.config.format)
@@ -345,7 +351,9 @@ impl Renderer {
                 .build()
                 .expect("Couldn't create pipeline"),
         );
+    }
 
+    fn build_grid_pipeline(&mut self, camera: &CameraManager) {
         // Grid shader
         self.grid_pipeline = Some(
             RenderPipelineBuilder::new(&self.device, self.config.format)
@@ -357,11 +365,13 @@ impl Renderer {
                 .build()
                 .expect("Couldn't create grid_pipeline"),
         );
+    }
 
+    fn build_outline_pipeline(&mut self, camera: &CameraManager) {
         // Outline shader
         self.mask_pipeline = Some(
             RenderPipelineBuilder::new(&self.device, wgpu::TextureFormat::R8Unorm)
-                .with_shader(include_str!("shaders/selection_mask.wgsl"))
+                .with_shader(include_str!("shaders/outline/selection_mask.wgsl"))
                 .with_vertex_layout(Mesh::vertex_layout())
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
                 .without_depth()
@@ -371,7 +381,7 @@ impl Renderer {
 
         self.composite_pipeline = Some(
             RenderPipelineBuilder::new(&self.device, self.config.format)
-                .with_shader(include_str!("shaders/outline_composite.wgsl"))
+                .with_shader(include_str!("shaders/outline/outline_composite.wgsl"))
                 .with_binding_group_layout(&self.outline.composite_bind_group_layout)
                 .with_blend(wgpu::BlendState::ALPHA_BLENDING)
                 .without_depth()

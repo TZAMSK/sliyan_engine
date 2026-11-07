@@ -13,15 +13,9 @@ impl Cube {
         cube.rebuild_mesh();
         cube
     }
-}
 
-impl ShapeBehavior for Cube {
-    fn shape_type(&self) -> ShapeType {
-        ShapeType::Cube
-    }
-
-    fn rebuild_mesh(&mut self) {
-        let vertices = &mut self.shape.mesh.vertices;
+    pub fn rebuild(shape: &mut Shape) {
+        let vertices = &mut shape.mesh.vertices;
 
         vertices.clear();
 
@@ -78,5 +72,15 @@ impl ShapeBehavior for Cube {
         vertices.push(glm::Vec3::new(1.0, -1.0, -1.0));
         vertices.push(glm::Vec3::new(1.0, -1.0, 1.0));
         vertices.push(glm::Vec3::new(1.0, 1.0, 1.0));
+    }
+}
+
+impl ShapeBehavior for Cube {
+    fn shape_type(&self) -> ShapeType {
+        ShapeType::Cube
+    }
+
+    fn rebuild_mesh(&mut self) {
+        Self::rebuild(&mut self.shape);
     }
 }

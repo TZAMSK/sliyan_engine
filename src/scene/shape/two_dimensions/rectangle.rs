@@ -13,15 +13,9 @@ impl Rectangle {
         rectangle.rebuild_mesh();
         rectangle
     }
-}
 
-impl ShapeBehavior for Rectangle {
-    fn shape_type(&self) -> ShapeType {
-        ShapeType::Rectangle
-    }
-
-    fn rebuild_mesh(&mut self) {
-        let vertices = &mut self.shape.mesh.vertices;
+    pub fn rebuild(shape: &mut Shape) {
+        let vertices = &mut shape.mesh.vertices;
 
         vertices.clear();
 
@@ -32,5 +26,15 @@ impl ShapeBehavior for Rectangle {
         vertices.push(glm::Vec3::new(-2.0, -1.0, 0.0));
         vertices.push(glm::Vec3::new(2.0, 1.0, 0.0));
         vertices.push(glm::Vec3::new(-2.0, 1.0, 0.0));
+    }
+}
+
+impl ShapeBehavior for Rectangle {
+    fn shape_type(&self) -> ShapeType {
+        ShapeType::Rectangle
+    }
+
+    fn rebuild_mesh(&mut self) {
+        Self::rebuild(&mut self.shape);
     }
 }

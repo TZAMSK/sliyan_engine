@@ -1,12 +1,23 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    default,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use wgpu::{BufferAddress, VertexBufferLayout, VertexStepMode};
+
+use crate::scene::shape::{
+    round::RoundProperties,
+    three_dimensions::{cube::Cube, sphere::Sphere},
+    two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
+};
 
 mod round;
 pub mod three_dimensions;
 pub mod two_dimensions;
 
+#[derive(Default)]
 pub enum ShapeType {
+    #[default]
     Triangle,
     Rectangle,
     Circle,
@@ -19,6 +30,13 @@ pub trait ShapeBehavior {
     fn rebuild_mesh(&mut self);
 }
 
+#[derive(Default)]
+pub enum Properties {
+    #[default]
+    None,
+    Round(RoundProperties),
+}
+
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -29,6 +47,8 @@ pub struct Shape {
     pub mesh: Mesh,
     pub material: Material,
     pub physics_body: PhysicsBody,
+    pub properties: Properties,
+    pub shape_type: ShapeType,
     pub children: Vec<Shape>,
     pub parent: Option<u64>,
 }
@@ -246,5 +266,15 @@ impl Shape {
         child.parent = None;
 
         Some(child)
+    }
+
+    pub fn rebuild_mesh(&mut self) {
+        match self.shape_type {
+            ShapeType::Triangle => Triangle::rebuild(self),
+            ShapeType::Rectangle => Rectangle::rebuild(self),
+            ShapeType::Circle => Circle::rebuild(self),
+            ShapeType::Cube => Cube::rebuild(self),
+            ShapeType::Sphere => Sphere::rebuild(self),
+        }
     }
 }
