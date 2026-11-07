@@ -111,7 +111,7 @@ impl UIManager {
         self.components.menu_bar.show(ui, state);
         self.components.toolbar.show(ui, state, &mut camera.camera);
         self.components.console.show(ui, state);
-        self.components.scene.show(ui, state);
+        self.components.scene.show(ui, state, scene);
         self.components.inspector.show(ui, state, scene);
 
         let mut transform_changed = false;
