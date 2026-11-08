@@ -1,13 +1,11 @@
-use std::os::unix::process::parent_id;
-
 use egui::Panel;
 use egui_winit::egui::Color32;
 
 use crate::{
     app::app_state::AppState,
     scene::{
-        shape::{Properties, Shape},
         Scene,
+        shape::{Properties, Shape},
     },
     ui::{dimensions, panels::title_panel},
 };
@@ -159,25 +157,53 @@ fn draw_transform_tab(ui: &mut egui::Ui, shape: &mut Shape) {
 
         let mut proprties_changed = false;
         if let Properties::Round(properties) = &mut shape.properties {
+            //Radius
             ui.label("Radius");
-            proprties_changed |= ui
-                .add_sized(
-                    [ui.available_width(), 30.0],
-                    egui::DragValue::new(&mut properties.radius)
-                        .speed(0.05)
-                        .range(0.01..=1000.0),
-                )
-                .changed();
 
+            ui.horizontal(|ui| {
+                if ui.add_sized([30.0, 30.0], egui::Button::new("-")).clicked() {
+                    properties.radius = (properties.radius - 0.05).max(0.01);
+                    proprties_changed = true;
+                }
+
+                proprties_changed |= ui
+                    .add_sized(
+                        [(ui.available_width() - 38.0).max(0.0), 30.0],
+                        egui::DragValue::new(&mut properties.radius)
+                            .speed(0.05)
+                            .range(0.01..=1000.0),
+                    )
+                    .changed();
+
+                if ui.add_sized([30.0, 30.0], egui::Button::new("+")).clicked() {
+                    properties.radius = (properties.radius + 0.05).min(1000.0);
+                    proprties_changed = true;
+                }
+            });
+
+            //Segments
             ui.label("Segments");
-            proprties_changed |= ui
-                .add_sized(
-                    [ui.available_width(), 30.0],
-                    egui::DragValue::new(&mut properties.segments)
-                        .speed(1.0)
-                        .range(3..=128),
-                )
-                .changed();
+
+            ui.horizontal(|ui| {
+                if ui.add_sized([30.0, 30.0], egui::Button::new("-")).clicked() {
+                    properties.segments = (properties.segments - 1).max(3);
+                    proprties_changed = true;
+                }
+
+                proprties_changed |= ui
+                    .add_sized(
+                        [(ui.available_width() - 38.0).max(0.0), 30.0],
+                        egui::DragValue::new(&mut properties.segments)
+                            .speed(1.0)
+                            .range(3..=128),
+                    )
+                    .changed();
+
+                if ui.add_sized([30.0, 30.0], egui::Button::new("+")).clicked() {
+                    properties.segments = (properties.segments + 1).min(128);
+                    proprties_changed = true;
+                }
+            });
         }
 
         if proprties_changed {

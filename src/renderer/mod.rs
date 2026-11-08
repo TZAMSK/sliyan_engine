@@ -1,6 +1,7 @@
 mod grid_axis_renderer;
 mod outline_renderer;
 mod pipeline;
+mod shadow_renderer;
 mod viewport_renderer;
 
 use std::sync::Arc;
@@ -18,7 +19,8 @@ use crate::{
     app::app_state::AppState,
     renderer::{
         grid_axis_renderer::GridAxisRenderer, outline_renderer::OutlineRenderer,
-        pipeline::RenderPipelineBuilder, viewport_renderer::ViewportRenderer,
+        pipeline::RenderPipelineBuilder, shadow_renderer::ShadowRenderer,
+        viewport_renderer::ViewportRenderer,
     },
     scene::{
         camera::CameraManager,
@@ -35,15 +37,18 @@ pub struct Renderer {
     pub config: SurfaceConfiguration,
     pipeline: Option<RenderPipeline>,
     pub viewport: ViewportRenderer,
+
     grid_pipeline: Option<RenderPipeline>,
     grid: GridAxisRenderer,
 
-    /*outline_pipeline: Option<RenderPipeline>,
-        outline: OutlineRenderer,
-    */
     mask_pipeline: Option<RenderPipeline>,
     composite_pipeline: Option<RenderPipeline>,
     outline: OutlineRenderer,
+
+    shadow: ShadowRenderer,
+    shadow_pipeline: Option<RenderPipeline>,
+
+    ground_pipeline: Option<RenderPipeline>,
 }
 
 fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
@@ -51,7 +56,7 @@ fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
         let mut shape = shape_ref.borrow_mut();
 
         if shape.mesh.vertices.is_empty() {
-            return;
+            continue;
         }
 
         let position = shape.transform.position;
@@ -71,8 +76,6 @@ fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
         if let Some(buffer) = &shape.mesh.vertex_buffer {
             queue.write_buffer(buffer, 0, &shape.mesh.vertex_data);
         }
-
-        upload_shapes(&mut shape.children, device, &queue);
     }
 }
 
@@ -124,6 +127,8 @@ impl Renderer {
 
         let outline = OutlineRenderer::new(&device, &viewport);
 
+        let shadow = ShadowRenderer::new(&device);
+
         Ok(Self {
             surface,
             device,
@@ -136,6 +141,9 @@ impl Renderer {
             mask_pipeline: None,
             composite_pipeline: None,
             outline,
+            shadow,
+            shadow_pipeline: None,
+            ground_pipeline: None,
         })
     }
 
@@ -160,12 +168,22 @@ impl Renderer {
         scene: &mut Scene,
         gizmo: &mut Gizmo,
     ) -> Result<(), SurfaceError> {
-        let (Some(pipeline), Some(grid_pipeline), Some(mask_pipeline), Some(composite_pipeline)) = (
+        let (
+            Some(pipeline),
+            Some(grid_pipeline),
+            Some(mask_pipeline),
+            Some(composite_pipeline),
+            Some(shadow_pipeline),
+            Some(ground_pipeline),
+        ) = (
             &self.pipeline,
             &self.grid_pipeline,
             &self.mask_pipeline,
             &self.composite_pipeline,
-        ) else {
+            &self.shadow_pipeline,
+            &self.ground_pipeline,
+        )
+        else {
             return Ok(());
         };
 
@@ -205,6 +223,39 @@ impl Renderer {
             });
 
         {
+            // Shader render pass
+            let mut shadow_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Shader Depth Pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.shadow.depth_view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            shadow_pass.set_pipeline(shadow_pipeline);
+            shadow_pass.set_bind_group(0, &self.shadow.light_bind_group, &[]);
+
+            for shape_ref in &scene.shapes {
+                let shape = shape_ref.borrow();
+
+                if let (Some(buf), num_vertices) =
+                    (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
+                {
+                    shadow_pass.set_vertex_buffer(0, buf.slice(..));
+                    shadow_pass.draw(0..*num_vertices as u32, 0..1);
+                }
+            }
+        }
+
+        {
             // Normal render pass
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("3D Render Pass"),
@@ -214,9 +265,9 @@ impl Renderer {
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Clear(Color {
-                                r: 0.04,
-                                g: 0.04,
-                                b: 0.04,
+                                r: 0.14,
+                                g: 0.14,
+                                b: 0.14,
                                 a: 1.0,
                             }),
                             store: StoreOp::Store,
@@ -251,6 +302,12 @@ impl Renderer {
                 multiview_mask: None,
             });
 
+            // Ground
+            render_pass.set_pipeline(ground_pipeline);
+            render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.shadow.shadow_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+
             // Grid
             render_pass.set_pipeline(grid_pipeline);
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
@@ -259,6 +316,7 @@ impl Renderer {
             // Normal shapes
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.shadow.shadow_bind_group, &[]);
 
             for shape_ref in &scene.shapes {
                 let shape = shape_ref.borrow();
@@ -356,6 +414,8 @@ impl Renderer {
         self.build_normal_pipeline(&camera);
         self.build_grid_pipeline(&camera);
         self.build_outline_pipeline(&camera);
+        self.build_shadow_pipeline();
+        self.build_ground_pipeline(&camera);
     }
 
     fn build_normal_pipeline(&mut self, camera: &CameraManager) {
@@ -365,6 +425,7 @@ impl Renderer {
                 .with_shader(include_str!("shaders/shader.wgsl"))
                 .with_vertex_layout(Mesh::vertex_layout())
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
+                .with_binding_group_layout(&self.shadow.shadow_bind_group_layout)
                 .with_id_format()
                 .build()
                 .expect("Couldn't create pipeline"),
@@ -375,7 +436,7 @@ impl Renderer {
         // Grid shader
         self.grid_pipeline = Some(
             RenderPipelineBuilder::new(&self.device, self.config.format)
-                .with_shader(include_str!("shaders/grid_shader.wgsl"))
+                .with_shader(include_str!("shaders/grid.wgsl"))
                 .with_vertex_layout(GridAxisRenderer::vertex_layout())
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
                 .with_topology(wgpu::PrimitiveTopology::LineList)
@@ -386,7 +447,7 @@ impl Renderer {
     }
 
     fn build_outline_pipeline(&mut self, camera: &CameraManager) {
-        // Outline shader
+        // outline shader
         self.mask_pipeline = Some(
             RenderPipelineBuilder::new(&self.device, wgpu::TextureFormat::R8Unorm)
                 .with_shader(include_str!("shaders/outline/selection_mask.wgsl"))
@@ -394,7 +455,7 @@ impl Renderer {
                 .with_binding_group_layout(&camera.camera_bind_group_layout)
                 .without_depth()
                 .build()
-                .expect("Couldn't create mask pipeline"),
+                .expect("couldn't create mask pipeline"),
         );
 
         self.composite_pipeline = Some(
@@ -404,7 +465,35 @@ impl Renderer {
                 .with_blend(wgpu::BlendState::ALPHA_BLENDING)
                 .without_depth()
                 .build()
-                .expect("Couldn't create composite pipeline"),
+                .expect("couldn't create composite pipeline"),
+        );
+    }
+
+    fn build_shadow_pipeline(&mut self) {
+        // Shadow shader
+        self.shadow_pipeline = Some(
+            RenderPipelineBuilder::new(&self.device, self.config.format)
+                .with_shader(include_str!("shaders/shadow.wgsl"))
+                .with_vertex_layout(Mesh::vertex_layout())
+                .with_binding_group_layout(&self.shadow.light_bind_group_layout)
+                .with_cull_mode(wgpu::Face::Back)
+                .with_depth_only()
+                .build()
+                .expect("Couldn't create shadow_pipeline"),
+        );
+    }
+
+    fn build_ground_pipeline(&mut self, camera: &CameraManager) {
+        // Ground shader
+        self.ground_pipeline = Some(
+            RenderPipelineBuilder::new(&self.device, self.config.format)
+                .with_shader(include_str!("shaders/ground.wgsl"))
+                .with_binding_group_layout(&camera.camera_bind_group_layout)
+                .with_binding_group_layout(&self.shadow.shadow_bind_group_layout)
+                .with_id_format()
+                .without_id_write()
+                .build()
+                .expect("Couldn't create ground_pipeline"),
         );
     }
 

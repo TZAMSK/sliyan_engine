@@ -13,7 +13,7 @@ use crate::{
         input::{Drag, Input},
     },
     renderer::Renderer,
-    scene::{Scene, camera::CameraManager, shape::three_dimensions::cube::Cube},
+    scene::{camera::CameraManager, shape::three_dimensions::cube::Cube, Scene},
     selection::PlacementMode,
     ui::UIManager,
 };

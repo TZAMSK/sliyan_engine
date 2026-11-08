@@ -19,8 +19,10 @@ pub struct RenderPipelineBuilder<'a> {
     depth_write_enabled: bool,
     id_write_enabled: bool,
     depth_compare: CompareFunction,
+    depth_only: bool,
     front_face: FrontFace,
     blend: Option<BlendState>,
+    depth_bias: DepthBiasState,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -36,10 +38,12 @@ impl<'a> RenderPipelineBuilder<'a> {
             cull_mode: None,
             depth_enabled: true,
             depth_write_enabled: true,
+            depth_only: false,
             id_write_enabled: true,
             depth_compare: CompareFunction::Less,
             front_face: FrontFace::Ccw,
             blend: None,
+            depth_bias: DepthBiasState::default(),
         }
     }
 
@@ -83,6 +87,11 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    pub fn with_depth_only(mut self) -> Self {
+        self.depth_only = true;
+        self
+    }
+
     pub fn without_id_write(mut self) -> Self {
         self.id_write_enabled = false;
         self
@@ -100,6 +109,15 @@ impl<'a> RenderPipelineBuilder<'a> {
 
     pub fn with_blend(mut self, blend: BlendState) -> Self {
         self.blend = Some(blend);
+        self
+    }
+
+    pub fn with_depth_bias(mut self, constant: i32, slope_scale: f32) -> Self {
+        self.depth_bias = DepthBiasState {
+            constant,
+            slope_scale,
+            clamp: 0.0,
+        };
         self
     }
 
@@ -124,23 +142,38 @@ impl<'a> RenderPipelineBuilder<'a> {
                 immediate_size: 0,
             });
 
-        let mut targets = vec![Some(ColorTargetState {
-            format: self.format,
-            blend: self.blend,
-            write_mask: ColorWrites::ALL,
-        })];
+        let mut targets = Vec::new();
 
-        if let Some(id_format) = self.id_format {
+        if !self.depth_only {
             targets.push(Some(ColorTargetState {
-                format: id_format,
-                blend: None,
-                write_mask: if self.id_write_enabled {
-                    ColorWrites::ALL
-                } else {
-                    ColorWrites::empty()
-                },
+                format: self.format,
+                blend: self.blend,
+                write_mask: ColorWrites::ALL,
             }));
+
+            if let Some(id_format) = self.id_format {
+                targets.push(Some(ColorTargetState {
+                    format: id_format,
+                    blend: None,
+                    write_mask: if self.id_write_enabled {
+                        ColorWrites::ALL
+                    } else {
+                        ColorWrites::empty()
+                    },
+                }));
+            }
         }
+
+        let fragment = if self.depth_only {
+            None
+        } else {
+            Some(FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs_main"),
+                targets: &targets,
+                compilation_options: PipelineCompilationOptions::default(),
+            })
+        };
 
         Ok(self
             .device
@@ -153,12 +186,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                     buffers: &vertex_layouts.iter().cloned().map(Some).collect::<Vec<_>>(),
                     compilation_options: PipelineCompilationOptions::default(),
                 },
-                fragment: Some(FragmentState {
-                    module: &shader_module,
-                    entry_point: Some("fs_main"),
-                    targets: &targets,
-                    compilation_options: PipelineCompilationOptions::default(),
-                }),
+                fragment,
                 primitive: PrimitiveState {
                     topology: self.topology,
                     strip_index_format: None,
@@ -174,7 +202,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                         depth_write_enabled: Some(self.depth_write_enabled),
                         depth_compare: Some(self.depth_compare),
                         stencil: StencilState::default(),
-                        bias: DepthBiasState::default(),
+                        bias: self.depth_bias,
                     })
                 } else {
                     None
