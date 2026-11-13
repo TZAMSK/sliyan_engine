@@ -1,9 +1,0 @@
-  󰆧 camera
-  󰆧 shape
-  𝙏 ShapeRef
- 𝓢 Scene
- ⦿ impl Scene
-  ├ ƒ add_shape
-  ├ ƒ remove_shape
-  ├ ƒ find_shape_by_id
-  └ ƒ find_shape_by_id_mut

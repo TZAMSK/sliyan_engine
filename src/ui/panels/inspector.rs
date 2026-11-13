@@ -55,7 +55,7 @@ impl InspectorPanel {
                     return;
                 }
 
-                let Some(shape) = scene.find_shape_by_id(id) else {
+                let Some(shape) = scene.find_shape_by_id(id as u64) else {
                     ui.label("Shape not found");
                     return;
                 };
@@ -88,9 +88,9 @@ impl InspectorPanel {
                             ));
 
                             match self.active_tab {
-                                0 => draw_color_tab(ui, scene, id),
-                                1 => draw_transform_tab(ui, scene, id),
-                                2 => draw_hierarchy_tab(ui, scene, id),
+                                0 => draw_color_tab(ui, scene, id as u64),
+                                1 => draw_transform_tab(ui, scene, id as u64),
+                                2 => draw_hierarchy_tab(ui, scene, id as u64),
                                 _ => {}
                             }
                         });
@@ -157,9 +157,13 @@ fn draw_transform_tab(ui: &mut egui::Ui, scene: &mut Scene, id: ShapeId) {
             return;
         };
 
-        draw_vec3(ui, "Position", &mut shape.transform.position, 0.05);
-        draw_vec3(ui, "Rotation", &mut shape.transform.rotation, 0.05);
-        draw_vec3(ui, "Scale", &mut shape.transform.scale, 0.05);
+        let mut position = shape.transform.position;
+        let mut rotation = shape.transform.rotation;
+        let mut scale = shape.transform.scale;
+
+        draw_vec3(ui, "Position", &mut position, 0.05);
+        draw_vec3(ui, "Rotation", &mut rotation, 0.05);
+        draw_vec3(ui, "Scale", &mut scale, 0.05);
 
         let Some(shape) = scene.find_shape_by_id_mut(id) else {
             return;
