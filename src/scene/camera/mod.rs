@@ -34,6 +34,8 @@ pub struct CameraUniform {
     view_proj: [[f32; 4]; 4],
 }
 
+const MIN_CAMERA_Z: f32 = 0.1;
+
 impl CameraManager {
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
         let mut camera = Camera {
@@ -105,6 +107,7 @@ impl CameraManager {
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
     } 
+    
 }
 
 impl Camera {
@@ -151,6 +154,10 @@ impl Camera {
         self.camera_movement.pitch = self.camera_movement.pitch.clamp(-89.0, 89.0);
 
         let radius = (self.position - self.target).magnitude();
+
+        let min_pitch = ((MIN_CAMERA_Z - self.target.z) / radius).clamp(-1.0, 1.0).asin().to_degrees();
+
+        self.camera_movement.pitch = self.camera_movement.pitch.clamp(min_pitch.max(-89.0), 89.0);
 
         let yaw_rad = self.camera_movement.yaw.to_radians();
         let pitch_rad = self.camera_movement.pitch.to_radians();

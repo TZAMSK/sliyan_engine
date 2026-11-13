@@ -24,8 +24,8 @@ use crate::{
     },
     scene::{
         camera::CameraManager,
-        shape::{Mesh, Transform},
-        Scene, ShapeRef,
+        shape::{Mesh, Shape, Shapes, Transform},
+        Scene,
     },
     ui::UIManager,
 };
@@ -51,10 +51,8 @@ pub struct Renderer {
     ground_pipeline: Option<RenderPipeline>,
 }
 
-fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
-    for shape_ref in shapes {
-        let mut shape = shape_ref.borrow_mut();
-
+fn upload_shapes(shapes: &mut Shapes, device: &Device, queue: &Queue) {
+    for (_, shape) in shapes {
         if shape.mesh.vertices.is_empty() {
             continue;
         }
@@ -80,7 +78,7 @@ fn upload_shapes(shapes: &mut [ShapeRef], device: &Device, queue: &Queue) {
 }
 
 impl Renderer {
-    pub async fn new(window: &Arc<Window>, shapes: &mut [ShapeRef]) -> anyhow::Result<Self> {
+    pub async fn new(window: &Arc<Window>, shapes: &mut Shapes) -> anyhow::Result<Self> {
         let instance = Instance::default();
         let surface = instance.create_surface(window.clone())?;
 
@@ -94,7 +92,14 @@ impl Renderer {
             .await
             .expect("Failed to find adapter");
 
-        let (device, queue) = adapter.request_device(&DeviceDescriptor::default()).await?;
+        let required_features = wgpu::Features::POLYGON_MODE_LINE;
+
+        let (device, queue) = adapter
+            .request_device(&DeviceDescriptor {
+                required_features,
+                ..Default::default()
+            })
+            .await?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
@@ -243,9 +248,7 @@ impl Renderer {
             shadow_pass.set_pipeline(shadow_pipeline);
             shadow_pass.set_bind_group(0, &self.shadow.light_bind_group, &[]);
 
-            for shape_ref in &scene.shapes {
-                let shape = shape_ref.borrow();
-
+            for (_, shape) in &scene.shapes {
                 if let (Some(buf), num_vertices) =
                     (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
                 {
@@ -318,9 +321,7 @@ impl Renderer {
             render_pass.set_bind_group(0, &camera.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.shadow.shadow_bind_group, &[]);
 
-            for shape_ref in &scene.shapes {
-                let shape = shape_ref.borrow();
-
+            for (_, shape) in &scene.shapes {
                 if let (Some(buf), num_vertices) =
                     (&shape.mesh.vertex_buffer, &shape.mesh.vertex_count())
                 {
@@ -351,9 +352,7 @@ impl Renderer {
             });
 
             // Outline A
-            if let Some(shape_ref) = selected_shape {
-                let shape = shape_ref.borrow();
-
+            if let Some(shape) = selected_shape {
                 if let Some(buffer) = &shape.mesh.vertex_buffer {
                     outline_render_pass_a.set_pipeline(mask_pipeline);
                     outline_render_pass_a.set_bind_group(0, &camera.camera_bind_group, &[]);
@@ -497,7 +496,7 @@ impl Renderer {
         );
     }
 
-    pub fn sync_shapes(&mut self, shapes: &mut [ShapeRef]) {
+    pub fn sync_shapes(&mut self, shapes: &mut Shapes) {
         upload_shapes(shapes, &self.device, &self.queue);
     }
 

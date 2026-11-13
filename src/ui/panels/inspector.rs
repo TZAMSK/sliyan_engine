@@ -4,8 +4,8 @@ use egui_winit::egui::Color32;
 use crate::{
     app::app_state::AppState,
     scene::{
+        shape::{Properties, Shape, ShapeId},
         Scene,
-        shape::{Properties, Shape},
     },
     ui::{dimensions, panels::title_panel},
 };
@@ -55,12 +55,10 @@ impl InspectorPanel {
                     return;
                 }
 
-                let Some(shape_ref) = scene.find_shape_by_id_mut(id as u64) else {
+                let Some(shape) = scene.find_shape_by_id(id) else {
                     ui.label("Shape not found");
                     return;
                 };
-
-                let mut shape = shape_ref.borrow_mut();
 
                 ui.label(format!("Selected: {} ({:2})", shape.name, shape.id));
                 ui.separator();
@@ -90,9 +88,9 @@ impl InspectorPanel {
                             ));
 
                             match self.active_tab {
-                                0 => draw_color_tab(ui, &mut shape),
-                                1 => draw_transform_tab(ui, &mut shape),
-                                2 => draw_hierarchy_tab(ui, &mut shape),
+                                0 => draw_color_tab(ui, scene, id),
+                                1 => draw_transform_tab(ui, scene, id),
+                                2 => draw_hierarchy_tab(ui, scene, id),
                                 _ => {}
                             }
                         });
@@ -123,8 +121,12 @@ impl InspectorPanel {
     }
 }
 
-fn draw_color_tab(ui: &mut egui::Ui, shape: &mut Shape) {
-    let color = &mut shape.material.color;
+fn draw_color_tab(ui: &mut egui::Ui, scene: &mut Scene, id: ShapeId) {
+    let Some(shape) = scene.find_shape_by_id_mut(id) else {
+        return;
+    };
+
+    let color = shape.material.color;
 
     let mut rgba = Color32::from_rgba_unmultiplied(
         (color.x * 255.0) as u8,
@@ -147,13 +149,21 @@ fn draw_color_tab(ui: &mut egui::Ui, shape: &mut Shape) {
     });
 }
 
-fn draw_transform_tab(ui: &mut egui::Ui, shape: &mut Shape) {
+fn draw_transform_tab(ui: &mut egui::Ui, scene: &mut Scene, id: ShapeId) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 8.0;
+
+        let Some(shape) = scene.find_shape_by_id(id) else {
+            return;
+        };
 
         draw_vec3(ui, "Position", &mut shape.transform.position, 0.05);
         draw_vec3(ui, "Rotation", &mut shape.transform.rotation, 0.05);
         draw_vec3(ui, "Scale", &mut shape.transform.scale, 0.05);
+
+        let Some(shape) = scene.find_shape_by_id_mut(id) else {
+            return;
+        };
 
         let mut proprties_changed = false;
         if let Properties::Round(properties) = &mut shape.properties {
@@ -234,7 +244,11 @@ fn format_vec3(v: [f32; 3]) -> String {
     format!("{:2}, {:2}, {:2}", v[0], v[1], v[2])
 }
 
-fn draw_hierarchy_tab(ui: &mut egui::Ui, shape: &mut Shape) {
+fn draw_hierarchy_tab(ui: &mut egui::Ui, scene: &Scene, id: ShapeId) {
+    let Some(shape) = scene.find_shape_by_id(id) else {
+        return;
+    };
+
     ui.vertical(|ui| {
         if let Some(parent_id) = shape.parent {
             ui.label(format!("Parent: {}", parent_id));
@@ -246,9 +260,10 @@ fn draw_hierarchy_tab(ui: &mut egui::Ui, shape: &mut Shape) {
             ui.label("No children");
         }
 
-        for child_ref in &shape.children {
-            let child = child_ref.borrow();
-            ui.label(format!("{} ({})", child.name, child.id));
+        for child_id in &shape.children {
+            if let Some(child) = scene.find_shape_by_id(*child_id) {
+                ui.label(format!("{} ({})", child.name, child.id));
+            }
         }
     });
 }

@@ -1,20 +1,17 @@
 pub mod camera;
 pub mod shape;
 
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{
     scene::shape::{
         three_dimensions::{cube::Cube, sphere::Sphere},
         two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
-        Shape,
+        Shape, ShapeId, Shapes,
     },
     selection::{PlacementMode, SelectionState},
 };
-pub type ShapeRef = Rc<RefCell<Shape>>;
 
 pub struct Scene {
-    pub shapes: Vec<ShapeRef>,
+    pub shapes: Shapes,
 }
 
 impl Scene {
@@ -39,45 +36,71 @@ impl Scene {
             _ => return,
         };
 
-        self.shapes.push(Rc::new(RefCell::new(shape)));
+        self.shapes.insert(shape.id, shape);
     }
 
     pub fn remove_shape(&mut self, id: u64) -> bool {
-        let Some(index) = self.shapes.iter().position(|shape| shape.borrow().id == id) else {
+        let Some(shape) = self.shapes.remove(&id) else {
             return false;
         };
 
-        let shape = self.shapes.remove(index);
-
-        let (parent_id, children) = {
-            let mut shape = shape.borrow_mut();
-            (shape.parent.take(), std::mem::take(&mut shape.children))
-        };
-
-        if let Some(parent_id) = parent_id {
-            if let Some(parent) = self.find_shape_by_id(parent_id) {
-                parent
-                    .borrow_mut()
-                    .children
-                    .retain(|child| child.borrow().id != id);
-            }
+        if let Some(parent) = shape.parent.and_then(|p| self.shapes.get_mut(&p)) {
+            parent.children.retain(|c| *c != id);
         }
 
-        for child in children {
-            child.borrow_mut().parent = None;
+        for child_id in shape.children {
+            if let Some(child) = self.shapes.get_mut(&child_id) {
+                child.parent = None;
+            }
         }
 
         true
     }
 
-    pub fn find_shape_by_id(&self, id: u64) -> Option<ShapeRef> {
-        self.shapes
-            .iter()
-            .find(|shape| shape.borrow().id == id)
-            .cloned()
+    pub fn find_shape_by_id(&self, id: u64) -> Option<&Shape> {
+        self.shapes.get(&id)
     }
 
-    pub fn find_shape_by_id_mut(&mut self, id: u64) -> Option<ShapeRef> {
-        self.find_shape_by_id(id)
+    pub fn find_shape_by_id_mut(&mut self, id: u64) -> Option<&mut Shape> {
+        self.shapes.get_mut(&id)
+    }
+
+    fn detach(&mut self, id: ShapeId) {
+        let old_parent = self.shapes.get_mut(&id).and_then(|s| s.parent.take());
+        if let Some(p) = old_parent.and_then(|p| self.shapes.get_mut(&p)) {
+            p.children.retain(|c| *c != id);
+        }
+    }
+
+    fn is_descendant_of(&self, id: ShapeId, ancestor: ShapeId) -> bool {
+        let mut current = self.shapes.get(&id).and_then(|s| s.parent);
+        while let Some(p) = current {
+            if p == ancestor {
+                return true;
+            }
+            current = self.shapes.get(&p).and_then(|s| s.parent);
+        }
+
+        false
+    }
+
+    pub fn add_child(&mut self, parent_id: ShapeId, child_id: ShapeId) -> bool {
+        if parent_id == child_id
+            || !self.shapes.contains_key(&parent_id)
+            || !self.shapes.contains_key(&child_id)
+            || self.is_descendant_of(parent_id, child_id)
+        {
+            return false;
+        }
+
+        self.detach(child_id);
+        self.shapes.get_mut(&child_id).unwrap().parent = Some(parent_id);
+        self.shapes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .push(child_id);
+
+        true
     }
 }

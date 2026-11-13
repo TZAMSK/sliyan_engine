@@ -1,17 +1,14 @@
 use std::{
-    default,
+    collections::HashMap,
     sync::atomic::{AtomicU64, Ordering},
 };
 
 use wgpu::{BufferAddress, VertexBufferLayout, VertexStepMode};
 
-use crate::scene::{
-    shape::{
-        round::RoundProperties,
-        three_dimensions::{cube::Cube, sphere::Sphere},
-        two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
-    },
-    ShapeRef,
+use crate::scene::shape::{
+    round::RoundProperties,
+    three_dimensions::{cube::Cube, sphere::Sphere},
+    two_dimensions::{circle::Circle, rectangle::Rectangle, triangle::Triangle},
 };
 
 mod round;
@@ -41,10 +38,12 @@ pub enum Properties {
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+pub type ShapeId = u64;
+pub type Shapes = HashMap<ShapeId, Shape>;
 
 #[derive(Default)]
 pub struct Shape {
-    pub id: u64,
+    pub id: ShapeId,
     pub name: String,
     pub transform: Transform,
     pub mesh: Mesh,
@@ -52,8 +51,16 @@ pub struct Shape {
     pub physics_body: PhysicsBody,
     pub properties: Properties,
     pub shape_type: ShapeType,
-    pub children: Vec<ShapeRef>,
-    pub parent: Option<u64>,
+
+    pub children: Vec<ShapeId>,
+    pub parent: Option<ShapeId>,
+}
+
+#[derive(Clone, Copy)]
+pub enum TransformationType {
+    Position,
+    Rotation,
+    Scale,
 }
 
 pub struct Transform {
@@ -160,7 +167,7 @@ impl Default for Material {
 }
 
 #[derive(Default)]
-struct PhysicsBody {
+pub struct PhysicsBody {
     pub volume: u32,
     pub following_parent: bool,
     pub has_physics_added: bool,
@@ -206,82 +213,69 @@ impl Shape {
         !self.children.is_empty()
     }
 
-    pub fn set_position(&mut self, position: glm::Vec3) {
-        let delta = position - self.transform.position;
-        self.transform.position = position;
+    pub fn set_transformation(
+        id: ShapeId,
+        shapes: &mut Shapes,
+        value: glm::Vec3,
+        ty: TransformationType,
+    ) {
+        let (children, change) = {
+            let Some(s) = shapes.get_mut(&id) else {
+                return;
+            };
 
-        for child in &self.children {
-            let mut child = child.borrow_mut();
+            let change = match ty {
+                TransformationType::Position => {
+                    let delta = value - s.transform.position;
 
-            if child.physics_body.following_parent {
-                let position = child.transform.position + delta;
-                child.set_position(position);
-            }
-        }
-    }
+                    s.transform.position = value;
+                    Some(delta)
+                }
+                TransformationType::Rotation => {
+                    let delta = value - s.transform.rotation;
 
-    pub fn set_rotation(&mut self, rotation: glm::Vec3) {
-        let delta = rotation - self.transform.rotation;
-        self.transform.rotation = rotation;
+                    s.transform.rotation = value;
+                    Some(delta)
+                }
+                TransformationType::Scale => {
+                    let old_scale = s.transform.scale;
+                    s.transform.scale = value;
 
-        for child in &self.children {
-            let mut child = child.borrow_mut();
+                    if old_scale.x.abs() < f32::EPSILON
+                        || old_scale.y.abs() < f32::EPSILON
+                        || old_scale.z.abs() < f32::EPSILON
+                    {
+                        None
+                    } else {
+                        let delta = value.component_div(&old_scale);
+                        Some(delta)
+                    }
+                }
+            };
 
-            if child.physics_body.following_parent {
-                let rotation = child.transform.rotation + delta;
-                child.set_rotation(rotation);
-            }
-        }
-    }
+            (s.children.clone(), change)
+        };
 
-    pub fn set_scale(&mut self, scale: glm::Vec3) {
-        let old_scale = self.transform.scale;
-        self.transform.scale = scale;
-
-        if old_scale.x.abs() < f32::EPSILON
-            || old_scale.y.abs() < f32::EPSILON
-            || old_scale.z.abs() < f32::EPSILON
-        {
+        let Some(change) = change else {
             return;
-        }
+        };
 
-        let ratio = scale.component_div(&old_scale);
-
-        for child in &self.children {
-            let mut child = child.borrow_mut();
-            if child.physics_body.following_parent {
-                let scale = child.transform.scale.component_mul(&ratio);
-                child.set_position(scale);
+        for child_id in children {
+            let Some(child) = shapes.get(&child_id) else {
+                continue;
+            };
+            if !child.physics_body.following_parent {
+                continue;
             }
+
+            let new_values = match ty {
+                TransformationType::Position => child.transform.position + change,
+                TransformationType::Rotation => child.transform.rotation + change,
+                TransformationType::Scale => child.transform.scale.component_mul(&change),
+            };
+
+            Shape::set_transformation(child_id, shapes, new_values, ty);
         }
-    }
-
-    pub fn add_child(&mut self, child: ShapeRef) {
-        let child_id = child.borrow().id;
-
-        if child_id == self.id {
-            return;
-        }
-
-        if self.children.iter().any(|c| c.borrow().id == child_id) {
-            return;
-        }
-
-        child.borrow_mut().parent = Some(self.id);
-        self.children.push(child);
-    }
-
-    pub fn remove_child(&mut self, child_id: u64) -> Option<ShapeRef> {
-        let index = self
-            .children
-            .iter()
-            .position(|child| child.borrow().id == child_id)?;
-
-        let child = self.children.remove(index);
-
-        child.borrow_mut().parent = None;
-
-        Some(child)
     }
 
     pub fn rebuild_mesh(&mut self) {

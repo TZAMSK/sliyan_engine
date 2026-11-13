@@ -6,7 +6,11 @@ use transform_gizmo_egui::{
 
 use crate::{
     app::app_state::{AppState, Console},
-    scene::{camera::CameraManager, Scene},
+    scene::{
+        camera::CameraManager,
+        shape::{Shape, TransformationType},
+        Scene,
+    },
 };
 
 pub struct GizmoApp {
@@ -63,11 +67,9 @@ impl GizmoApp {
             return false;
         }
 
-        let Some(shape_ref) = scene.find_shape_by_id_mut(id as u64) else {
+        let Some(shape) = scene.find_shape_by_id_mut(id as u64) else {
             return false;
         };
-
-        let mut shape = shape_ref.borrow_mut();
 
         let position = shape.transform.position;
         let rotation = shape.transform.rotation;
@@ -109,19 +111,30 @@ impl GizmoApp {
                 )
                 .to_euler(EulerRot::XYZ);
 
-                shape.set_position(glm::Vec3::new(
-                    translation.x as f32,
-                    translation.y as f32,
-                    translation.z as f32,
-                ));
+                Shape::set_transformation(
+                    id as u64,
+                    &mut scene.shapes,
+                    glm::Vec3::new(
+                        translation.x as f32,
+                        translation.y as f32,
+                        translation.z as f32,
+                    ),
+                    TransformationType::Position,
+                );
 
-                shape.set_rotation(glm::Vec3::new(rx as f32, ry as f32, rz as f32));
+                Shape::set_transformation(
+                    id as u64,
+                    &mut scene.shapes,
+                    glm::Vec3::new(rx as f32, ry as f32, rz as f32),
+                    TransformationType::Rotation,
+                );
 
-                shape.set_scale(glm::Vec3::new(
-                    scale.x as f32,
-                    scale.y as f32,
-                    scale.z as f32,
-                ));
+                Shape::set_transformation(
+                    id as u64,
+                    &mut scene.shapes,
+                    glm::Vec3::new(scale.x as f32, scale.y as f32, scale.z as f32),
+                    TransformationType::Scale,
+                );
 
                 return true;
             }
