@@ -19,6 +19,8 @@ pub struct Camera {
     zfar: f32,
     projection: glm::Mat4,
     view: glm::Mat4,
+
+    #[allow(dead_code)]
     ortho_scale: f32,
     camera_movement: CameraMovement,
 }

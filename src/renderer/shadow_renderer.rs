@@ -1,11 +1,13 @@
 use wgpu::util::DeviceExt;
 
-use crate::{renderer::viewport_renderer::ViewportRenderer, scene::camera::opengl_to_wgpu_matrix};
+use crate::scene::camera::opengl_to_wgpu_matrix;
 
 pub struct ShadowRenderer {
+    #[allow(dead_code)]
     pub depth_texture: wgpu::Texture,
     pub depth_view: wgpu::TextureView,
 
+    #[allow(dead_code)]
     pub light_buffer: wgpu::Buffer,
     pub light_bind_group: wgpu::BindGroup,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
@@ -13,6 +15,7 @@ pub struct ShadowRenderer {
     pub shadow_bind_group: wgpu::BindGroup,
     pub shadow_bind_group_layout: wgpu::BindGroupLayout,
 
+    #[allow(dead_code)]
     pub sampler: wgpu::Sampler,
 }
 

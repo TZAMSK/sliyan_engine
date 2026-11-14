@@ -24,7 +24,7 @@ use crate::{
     },
     scene::{
         camera::CameraManager,
-        shape::{Mesh, Shape, Shapes, Transform},
+        shape::{Mesh, Shapes, Transform},
         Scene,
     },
     ui::UIManager,

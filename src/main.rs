@@ -1,5 +1,6 @@
 mod app;
 pub mod editor;
+mod physics;
 mod renderer;
 mod scene;
 pub mod selection;

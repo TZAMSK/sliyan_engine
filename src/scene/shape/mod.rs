@@ -26,6 +26,7 @@ pub enum ShapeType {
 }
 
 pub trait ShapeBehavior {
+    #[allow(dead_code)]
     fn shape_type(&self) -> ShapeType;
     fn rebuild_mesh(&mut self);
 }
@@ -92,6 +93,10 @@ pub struct Mesh {
 impl Mesh {
     pub fn vertex_count(&self) -> usize {
         self.vertices.len()
+    }
+
+    pub fn vertex_data(&self) -> Vec<u8> {
+        self.vertex_data.clone()
     }
 
     pub fn vertex_layout() -> VertexBufferLayout<'static> {
@@ -207,10 +212,6 @@ impl Shape {
             material: Material { color },
             ..Default::default()
         }
-    }
-
-    fn is_parent(&self) -> bool {
-        !self.children.is_empty()
     }
 
     pub fn set_transformation(

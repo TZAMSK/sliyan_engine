@@ -4,12 +4,15 @@ use wgpu::{
 };
 
 pub struct ViewportRenderer {
+    #[allow(dead_code)]
     pub texture: Texture,
     pub view: TextureView,
+    #[allow(dead_code)]
     pub depth_texture: Texture,
     pub depth_view: TextureView,
     pub id_texture: Texture,
     pub id_view: TextureView,
+    #[allow(dead_code)]
     pub mask_texture: Texture,
     pub mask_view: TextureView,
     pub format: TextureFormat,

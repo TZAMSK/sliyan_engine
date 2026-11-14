@@ -13,38 +13,47 @@ use crate::{
     },
 };
 
-pub struct GizmoApp {
-    gizmo_mode: EnumSet<GizmoMode>,
-}
-
+#[derive(Clone, Copy)]
 pub enum GizmoModePicker {
     Translation,
     Rotation,
     Scale,
 }
 
+impl GizmoModePicker {
+    pub fn modes(&self) -> EnumSet<GizmoMode> {
+        match self {
+            Self::Translation => GizmoMode::all_translate(),
+            Self::Rotation => GizmoMode::all_rotate(),
+            Self::Scale => GizmoMode::all_scale(),
+        }
+    }
+}
+
+pub struct GizmoApp {
+    mode: GizmoModePicker,
+}
+
 impl GizmoApp {
     pub fn new() -> Self {
         Self {
-            gizmo_mode: GizmoMode::all_translate(),
+            mode: GizmoModePicker::Translation,
         }
     }
 
     pub fn set_to(&mut self, mode: GizmoModePicker, console: &mut Console) {
+        self.mode = mode;
+
         match mode {
             GizmoModePicker::Translation => {
-                self.gizmo_mode = GizmoMode::all_translate();
                 console.append("Gizmo on translation mode");
             }
             GizmoModePicker::Rotation => {
-                self.gizmo_mode = GizmoMode::all_rotate();
                 console.append("Gizmo on rotation mode");
             }
             GizmoModePicker::Scale => {
-                self.gizmo_mode = GizmoMode::all_scale();
                 console.append("Gizmo on scale mode");
             }
-            _ => {}
         }
     }
 
@@ -93,7 +102,7 @@ impl GizmoApp {
             view_matrix: view_matrix.into(),
             projection_matrix: projection_matrix.into(),
             viewport: rect,
-            modes: self.gizmo_mode,
+            modes: self.mode.modes(),
             orientation: GizmoOrientation::Local,
             ..Default::default()
         });

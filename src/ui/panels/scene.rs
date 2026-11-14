@@ -12,11 +12,6 @@ use crate::{
 
 pub struct ScenePanel;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Location {
-    row: usize,
-}
-
 impl ScenePanel {
     pub fn new() -> Self {
         Self

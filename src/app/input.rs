@@ -34,6 +34,7 @@ impl Input {
         self.buttons.contains(&b)
     }
 
+    #[allow(dead_code)]
     pub fn mouse_pos(&self) -> glm::Vec2 {
         self.mouse_pos
     }

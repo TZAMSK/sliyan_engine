@@ -241,6 +241,7 @@ impl UIManager {
         &self.ctx
     }
 
+    #[allow(dead_code)]
     pub fn set_viewport_texture(&mut self, texture_id: egui::TextureId) {
         self.viewport_texture_id = Some(texture_id)
     }

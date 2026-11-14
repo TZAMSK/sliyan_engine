@@ -82,6 +82,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn without_depth_write(mut self) -> Self {
         self.depth_write_enabled = false;
         self
@@ -97,11 +98,13 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_depth_compare(mut self, compare: CompareFunction) -> Self {
         self.depth_compare = compare;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_front_face(mut self, front_face: FrontFace) -> Self {
         self.front_face = front_face;
         self
@@ -112,6 +115,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_depth_bias(mut self, constant: i32, slope_scale: f32) -> Self {
         self.depth_bias = DepthBiasState {
             constant,
@@ -221,5 +225,6 @@ impl<'a> RenderPipelineBuilder<'a> {
 #[derive(Debug)]
 pub enum PipelineError {
     MissingShader,
+    #[allow(dead_code)]
     MissingVertexLayout,
 }

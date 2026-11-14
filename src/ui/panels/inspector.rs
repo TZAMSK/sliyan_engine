@@ -1,10 +1,10 @@
-use egui::Panel;
+use egui::{Checkbox, Panel};
 use egui_winit::egui::Color32;
 
 use crate::{
     app::app_state::AppState,
     scene::{
-        shape::{Properties, Shape, ShapeId},
+        shape::{Properties, ShapeId},
         Scene,
     },
     ui::{dimensions, panels::title_panel},
@@ -248,24 +248,30 @@ fn format_vec3(v: [f32; 3]) -> String {
     format!("{:2}, {:2}, {:2}", v[0], v[1], v[2])
 }
 
-fn draw_hierarchy_tab(ui: &mut egui::Ui, scene: &Scene, id: ShapeId) {
-    let Some(shape) = scene.find_shape_by_id(id) else {
-        return;
-    };
-
+fn draw_hierarchy_tab(ui: &mut egui::Ui, scene: &mut Scene, id: ShapeId) {
     ui.vertical(|ui| {
+        let Some(shape) = scene.find_shape_by_id_mut(id) else {
+            return;
+        };
+
+        let children = shape.children.clone();
+
         if let Some(parent_id) = shape.parent {
             ui.label(format!("Parent: {}", parent_id));
+            ui.add(Checkbox::new(
+                &mut shape.physics_body.following_parent,
+                "Follow parent",
+            ));
         } else {
             ui.label("No parent");
         }
 
-        if shape.children.is_empty() {
+        if children.is_empty() {
             ui.label("No children");
         }
 
-        for child_id in &shape.children {
-            if let Some(child) = scene.find_shape_by_id(*child_id) {
+        for child_id in children {
+            if let Some(child) = scene.find_shape_by_id(child_id) {
                 ui.label(format!("{} ({})", child.name, child.id));
             }
         }
